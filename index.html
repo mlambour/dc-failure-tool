@@ -70,6 +70,9 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 </div>
 <div class="br">
 <button class="btn bp" id="btnGenTables">Generate Configuration Tables</button>
+<button class="btn bs bsm" id="btnExport">💾 Save to XML</button>
+<button class="btn bs bsm" id="btnImport">📂 Load XML</button>
+<input type="file" id="fileInput" accept=".xml" style="display:none">
 </div>
 </div>
 
@@ -95,11 +98,8 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 
 <div id="results">
 <div class="card"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>UPS Output (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
-
 <div class="card"><h2>⚡ Failure Scenario Matrix — UPS Output Load (kW)</h2><p class="nt">Shows UPS output load on each surviving string when one string fails. Failed string shown as "—".</p><div class="sx"><table id="matrixTable"><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
-
 <div class="card"><h2>🔧 Equipment Sizing Recommendations</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst Case UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Worst Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
-
 <div class="br" style="margin-bottom:30px"><button class="btn bp" id="btnPrint">📄 Print / Save PDF</button></div>
 </div>
 </div>
@@ -113,7 +113,22 @@ function fmt(n){return n>=10?Math.round(n).toLocaleString('en'):n.toFixed(1);}
 function fmtD(n){return n.toFixed(1);}
 
 function genPairDual(nS,nR){var p=[];var s=gs();for(var i=0;i<nR;i++){var pi=(i*2)%nS;var bi=(i*2+1)%nS;if(bi===pi)bi=(bi+1)%nS;p.push({load:0,a:s[pi],b:s[bi]});}return p;}
-function genPairTriple(nS,nR){var p=[];var s=gs();for(var i=0;i<nR;i++){var pi=(i*2)%nS;var si=(i*2+1)%nS;if(si===pi)si=(si+1)%nS;var ci=(i)%nS;if(ci===pi||ci===si)ci=(ci+1)%nS;if(ci===pi||ci===si)ci=(ci+1)%nS;p.push({load:0,a:s[pi],b:s[si],c:s[ci]});}return p;}
+
+function genPairTriple(nS,nR){
+  var p=[];var s=gs();
+  var catcherIdx=0;
+  for(var i=0;i<nR;i++){
+    var pi=(i*2)%nS;var si=(i*2+1)%nS;
+    if(si===pi)si=(si+1)%nS;
+    var ci=catcherIdx%nS;
+    var tries=0;
+    while((ci===pi||ci===si)&&tries<nS){ci=(ci+1)%nS;tries++;}
+    catcherIdx=ci+1;
+    p.push({load:0,a:s[pi],b:s[si],c:s[ci]});
+  }
+  return p;
+}
+
 function genPairQuad(nS,nR){var p=[];var s=gs();for(var i=0;i<nR;i++){var ai=(i*4)%nS;var bi=(i*4+1)%nS;if(bi===ai)bi=(bi+1)%nS;var ci=(i*4+2)%nS;if(ci===ai||ci===bi)ci=(ci+1)%nS;if(ci===ai||ci===bi)ci=(ci+1)%nS;var di=(i*4+3)%nS;if(di===ai||di===bi||di===ci)di=(di+1)%nS;if(di===ai||di===bi||di===ci)di=(di+1)%nS;if(di===ai||di===bi||di===ci)di=(di+1)%nS;p.push({load:0,a:s[ai%nS],b:s[bi%nS],c:s[ci%nS],d:s[di%nS]});}return p;}
 
 function genTables(){
@@ -127,7 +142,12 @@ function genTables(){
   else pairs=genPairQuad(nStrings,nRows);
   rowData=[];
   for(var i=0;i<nRows;i++){pairs[i].load=perRow;rowData.push(pairs[i]);}
-  otherData=[];for(var i=0;i<nStrings;i++)otherData.push({mech:0,pumps:0,misc:0});
+  var oldOther=otherData.slice();
+  otherData=[];
+  for(var i=0;i<nStrings;i++){
+    if(oldOther[i])otherData.push({mech:oldOther[i].mech,pumps:oldOther[i].pumps,misc:oldOther[i].misc});
+    else otherData.push({mech:0,pumps:0,misc:0});
+  }
   renderRowTable();renderOtherTable();
   document.getElementById('configSection').style.display='block';
   document.getElementById('results').style.display='none';
@@ -270,6 +290,88 @@ function calculate(){
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
+function exportXML(){
+  var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool>\n';
+  x+='  <params>\n';
+  x+='    <itLoad>'+document.getElementById('itLoad').value+'</itLoad>\n';
+  x+='    <loadUnit>'+document.getElementById('loadUnit').value+'</loadUnit>\n';
+  x+='    <numStrings>'+document.getElementById('numStrings').value+'</numStrings>\n';
+  x+='    <numRows>'+document.getElementById('numRows').value+'</numRows>\n';
+  x+='    <distMode>'+document.getElementById('distMode').value+'</distMode>\n';
+  x+='    <upsCharge>'+document.getElementById('upsCharge').value+'</upsCharge>\n';
+  x+='    <upsLoss>'+document.getElementById('upsLoss').value+'</upsLoss>\n';
+  x+='    <pf>'+document.getElementById('pf').value+'</pf>\n';
+  x+='    <infraLoss>'+document.getElementById('infraLoss').value+'</infraLoss>\n';
+  x+='    <txRatings>'+document.getElementById('txRatings').value+'</txRatings>\n';
+  x+='  </params>\n';
+  x+='  <rows>\n';
+  for(var i=0;i<rowData.length;i++){
+    var r=rowData[i];
+    x+='    <row num="'+(i+1)+'" load="'+r.load+'" a="'+r.a+'" b="'+r.b+'"';
+    if(r.c)x+=' c="'+r.c+'"';
+    if(r.d)x+=' d="'+r.d+'"';
+    x+='/>\n';
+  }
+  x+='  </rows>\n';
+  x+='  <otherLoads>\n';
+  var strings=gs();
+  for(var i=0;i<otherData.length;i++){
+    var o=otherData[i];
+    x+='    <string id="'+strings[i]+'" mech="'+o.mech+'" pumps="'+o.pumps+'" misc="'+o.misc+'"/>\n';
+  }
+  x+='  </otherLoads>\n';
+  x+='</DCFailureTool>';
+  var blob=new Blob([x],{type:'application/xml'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='dc-failure-scenario.xml';a.click();URL.revokeObjectURL(a.href);
+}
+
+function importXML(file){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var parser=new DOMParser();
+      var doc=parser.parseFromString(e.target.result,'text/xml');
+      var p=doc.querySelector('params');
+      if(p){
+        var gv=function(t){var el=p.querySelector(t);return el?el.textContent:'';};
+        document.getElementById('itLoad').value=gv('itLoad');
+        document.getElementById('loadUnit').value=gv('loadUnit');
+        document.getElementById('numStrings').value=gv('numStrings');
+        document.getElementById('numRows').value=gv('numRows');
+        document.getElementById('distMode').value=gv('distMode');
+        document.getElementById('upsCharge').value=gv('upsCharge');
+        document.getElementById('upsLoss').value=gv('upsLoss');
+        document.getElementById('pf').value=gv('pf');
+        document.getElementById('infraLoss').value=gv('infraLoss');
+        document.getElementById('txRatings').value=gv('txRatings');
+      }
+      nStrings=parseInt(document.getElementById('numStrings').value);
+      nRows=parseInt(document.getElementById('numRows').value);
+      mode=document.getElementById('distMode').value;
+      document.getElementById('modeDesc').textContent=MODES[mode];
+      var rows=doc.querySelectorAll('rows row');
+      rowData=[];
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i];
+        var rd={load:parseFloat(r.getAttribute('load'))||0,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B'};
+        if(r.getAttribute('c'))rd.c=r.getAttribute('c');
+        if(r.getAttribute('d'))rd.d=r.getAttribute('d');
+        rowData.push(rd);
+      }
+      var oLoads=doc.querySelectorAll('otherLoads string');
+      otherData=[];
+      for(var i=0;i<oLoads.length;i++){
+        var ol=oLoads[i];
+        otherData.push({mech:parseFloat(ol.getAttribute('mech'))||0,pumps:parseFloat(ol.getAttribute('pumps'))||0,misc:parseFloat(ol.getAttribute('misc'))||0});
+      }
+      renderRowTable();renderOtherTable();
+      document.getElementById('configSection').style.display='block';
+      document.getElementById('results').style.display='none';
+    }catch(err){alert('Error loading XML: '+err.message);}
+  };
+  reader.readAsText(file);
+}
 
 document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnGenTables').addEventListener('click',genTables);
@@ -277,5 +379,11 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnCalc').addEventListener('click',calculate);
   document.getElementById('btnPrint').addEventListener('click',function(){window.print();});
   document.getElementById('distMode').addEventListener('change',function(){document.getElementById('modeDesc').textContent=MODES[this.value];});
+  document.getElementById('btnExport').addEventListener('click',function(){
+    if(rowData.length===0){alert('Generate tables first before saving.');return;}
+    exportXML();
+  });
+  document.getElementById('btnImport').addEventListener('click',function(){document.getElementById('fileInput').click();});
+  document.getElementById('fileInput').addEventListener('change',function(e){if(e.target.files[0])importXML(e.target.files[0]);e.target.value='';});
 });
 </script></body></html>
