@@ -140,8 +140,12 @@ function genTables(){
   if(mode==='dual')pairs=genPairDual(nStrings,nRows);
   else if(mode==='triple')pairs=genPairTriple(nStrings,nRows);
   else pairs=genPairQuad(nStrings,nRows);
+  var oldRowData=rowData.slice();
+  var sameRows=oldRowData.length===nRows;
+  var oldTotal=0;for(var k=0;k<oldRowData.length;k++)oldTotal+=oldRowData[k].load;
+  var sameLoad=sameRows&&Math.abs(oldTotal-itKW)<0.5;
   rowData=[];
-  for(var i=0;i<nRows;i++){pairs[i].load=perRow;rowData.push(pairs[i]);}
+  for(var i=0;i<nRows;i++){pairs[i].load=sameLoad?oldRowData[i].load:perRow;rowData.push(pairs[i]);}
   var oldOther=otherData.slice();
   otherData=[];
   for(var i=0;i<nStrings;i++){
