@@ -8,11 +8,11 @@
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0e17;--card:#131a2b;--border:#1e2a42;--accent:#00b4d8;--accent2:#0077b6;--text:#e0e6f0;--text2:#8892a4;--success:#00c853;--warn:#ffa726;--danger:#ef5350;--crit:#ff1744}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
-.container{max-width:1400px;margin:0 auto}
+.cnt{max-width:1400px;margin:0 auto}
 h1{font-size:1.7rem;font-weight:700;margin-bottom:4px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.subtitle{color:var(--text2);font-size:0.9rem;margin-bottom:24px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px}
-.card h2{font-size:1.1rem;margin-bottom:14px;color:var(--accent)}
+.sub{color:var(--text2);font-size:0.9rem;margin-bottom:24px}
+.cd{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px}
+.cd h2{font-size:1.1rem;margin-bottom:14px;color:var(--accent)}
 .fr{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px}
 .fg{flex:1;min-width:160px}
 .fg label{display:block;font-size:0.82rem;color:var(--text2);margin-bottom:4px}
@@ -40,353 +40,326 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 .et td{padding:3px 5px}
 .sx{overflow-x:auto}
 .nt{font-size:0.8rem;color:var(--text2);margin-top:6px;font-style:italic}
-.mode-desc{font-size:0.82rem;color:var(--text2);margin-top:4px;padding:8px 12px;background:#0d1321;border-radius:6px;border-left:3px solid var(--accent)}
-@media print{body{background:#fff;color:#000;padding:10px}.card{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}}
-@media(max-width:700px){body{padding:10px}.card{padding:14px}.fr{flex-direction:column}h1{font-size:1.3rem}}
+.md{font-size:0.82rem;color:var(--text2);margin-top:4px;padding:8px 12px;background:#0d1321;border-radius:6px;border-left:3px solid var(--accent)}
+.step{display:inline-block;padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:700;margin-right:8px}
+.s1{background:rgba(0,180,216,0.15);color:var(--accent)}
+.s2{background:rgba(0,200,83,0.15);color:var(--success)}
+.bal{margin-top:10px;padding:10px 14px;background:#0d1321;border-radius:8px;font-size:0.85rem}
+.bal strong{color:var(--accent)}
+.hidden{display:none}
+@media print{body{background:#fff;color:#000;padding:10px}.cd{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}}
+@media(max-width:700px){body{padding:10px}.cd{padding:14px}.fr{flex-direction:column}h1{font-size:1.3rem}}
 </style>
 </head>
 <body>
-<div class="container">
+<div class="cnt">
 <h1>⚡ DC Failure Scenario & Equipment Sizing Tool</h1>
-<p class="subtitle">Power String Failure Analysis — UPS, Generator & Transformer Sizing</p>
+<p class="sub">Power String Failure Analysis — UPS, Generator & Transformer Sizing</p>
 
-<div class="card">
+<div class="cd">
 <h2>📊 System Parameters</h2>
 <div class="fr">
 <div class="fg"><label>IT Load</label><div style="display:flex;gap:6px"><input type="number" id="itLoad" value="5" step="0.1" min="0.01" style="flex:1"><select id="loadUnit" style="width:70px"><option value="MW">MW</option><option value="kW">kW</option></select></div></div>
 <div class="fg"><label>Power Strings</label><input type="number" id="numStrings" value="5" min="2" max="10"></div>
 <div class="fg"><label>Rack Rows</label><input type="number" id="numRows" value="10" min="1" max="50"></div>
-<div class="fg"><label>Distribution Mode</label><select id="distMode"><option value="dual">Dual (A/B)</option><option value="triple">Triple (A/B + Catcher)</option><option value="quad">Quad (A/B + C/D)</option></select></div>
 </div>
-<div id="modeDesc" class="mode-desc">Dual: Each row fed by 2 busbars (50/50 split). On failure, surviving busbar takes 100%.</div>
-<div class="fr" style="margin-top:14px">
+<div class="fr">
 <div class="fg"><label>UPS Charging %</label><input type="number" id="upsCharge" value="3.5" step="0.5"></div>
 <div class="fg"><label>UPS Losses %</label><input type="number" id="upsLoss" value="4" step="0.5"></div>
 <div class="fg"><label>Power Factor</label><input type="number" id="pf" value="0.9" step="0.05" min="0.5" max="1"></div>
 <div class="fg"><label>Infra Loss %</label><input type="number" id="infraLoss" value="0.25" step="0.05"></div>
 </div>
-<div class="fr">
-<div class="fg" style="min-width:300px"><label>Transformer Ratings (kVA, comma-sep)</label><input type="text" id="txRatings" value="800,1000,1250,1500,2000,2500,3150"></div>
-</div>
+<div class="fr"><div class="fg" style="min-width:300px"><label>Transformer Ratings (kVA)</label><input type="text" id="txRatings" value="800,1000,1250,1500,2000,2500,3150"></div></div>
 <div class="br">
-<button class="btn bp" id="btnGenTables">Generate Configuration Tables</button>
-<button class="btn bs bsm" id="btnExport">💾 Save to XML</button>
+<button class="btn bs bsm" id="btnExport">💾 Save XML</button>
 <button class="btn bs bsm" id="btnImport">📂 Load XML</button>
 <input type="file" id="fileInput" accept=".xml" style="display:none">
 </div>
 </div>
 
-<div id="configSection" style="display:none">
-<div class="card">
-<h2>📋 Rack Row Configuration</h2>
-<p class="nt" id="rowHint"></p>
-<div class="br" style="margin-bottom:10px;margin-top:0"><button class="btn bs bsm" id="btnUniform">Reset to Uniform</button></div>
-<div class="sx"><table class="et" id="rowTable"><thead id="rowHead"></thead><tbody id="rowBody"></tbody></table></div>
+<div class="cd">
+<h2><span class="step s1">STEP 1</span> Rack Row IT Loads</h2>
+<p class="nt">Define the kW load for each rack row. Default is uniform distribution.</p>
+<div class="br" style="margin-bottom:10px;margin-top:0">
+<button class="btn bp bsm" id="btnGenRows">Generate Rows</button>
+<button class="btn bs bsm" id="btnUniform">Reset to Uniform</button>
+</div>
+<div class="sx" id="rowSection" class="hidden"><table class="et"><thead><tr><th>Row</th><th>Load (kW)</th></tr></thead><tbody id="rowBody"></tbody></table></div>
 <div id="rowTotal" class="nt" style="margin-top:8px"></div>
 </div>
 
-<div class="card">
-<h2>🔧 Other Loads Per String (Non-IT, fixed)</h2>
-<p class="nt">Mechanical/cooling loads per string. These do NOT redistribute on string failure.</p>
-<div class="sx"><table class="et" id="otherTable"><thead><tr><th>String</th><th>Mech Cooling (kW)</th><th>Pumps (kW)</th><th>Misc (kW)</th><th>Total</th></tr></thead><tbody id="otherBody"></tbody></table></div>
+<div class="cd" id="step2Card">
+<h2><span class="step s2">STEP 2</span> Busbar Distribution & String Allocation</h2>
+<div class="fr">
+<div class="fg"><label>Distribution Mode</label><select id="distMode"><option value="dual">Dual (A/B)</option><option value="triple">Triple (A/B + Catcher)</option><option value="quad">Quad (A/B + C/D)</option></select></div>
+</div>
+<div id="modeDesc" class="md">Dual: Each row fed by 2 busbars (50/50 split). On failure, surviving busbar takes 100%.</div>
+<div class="br" style="margin-top:10px">
+<button class="btn bp bsm" id="btnAllocate">Auto-Balance Allocation</button>
+</div>
+<div id="allocSection" class="hidden">
+<div class="sx" style="margin-top:10px"><table class="et" id="allocTable"><thead id="allocHead"></thead><tbody id="allocBody"></tbody></table></div>
+<div id="balanceInfo" class="bal"></div>
+</div>
 </div>
 
-<div class="br">
-<button class="btn bp" id="btnCalc">Calculate Failure Scenarios</button>
+<div class="cd">
+<h2>🔧 Other Loads Per String (Non-IT, fixed)</h2>
+<p class="nt">Mechanical/cooling loads per string. Do NOT redistribute on failure.</p>
+<div class="sx"><table class="et"><thead><tr><th>String</th><th>Mech Cooling (kW)</th><th>Pumps (kW)</th><th>Misc (kW)</th><th>Total</th></tr></thead><tbody id="otherBody"></tbody></table></div>
 </div>
-</div>
+
+<div class="br"><button class="btn bp" id="btnCalc">Calculate Failure Scenarios</button></div>
 
 <div id="results">
-<div class="card"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>UPS Output (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
-<div class="card"><h2>⚡ Failure Scenario Matrix — UPS Output Load (kW)</h2><p class="nt">Shows UPS output load on each surviving string when one string fails. Failed string shown as "—".</p><div class="sx"><table id="matrixTable"><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
-<div class="card"><h2>🔧 Equipment Sizing Recommendations</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst Case UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Worst Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
-<div class="br" style="margin-bottom:30px"><button class="btn bp" id="btnPrint">📄 Print / Save PDF</button></div>
+<div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>UPS Output (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
+<div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
+<div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
+<div class="br" style="margin-bottom:30px"><button class="btn bp" id="btnPrint">📄 Print / PDF</button></div>
 </div>
 </div>
 <script>
-var SL='ABCDEFGHIJ';
-var rowData=[],otherData=[],nStrings=5,nRows=10,mode='dual';
-var MODES={dual:'Dual: Each row fed by 2 busbars (50/50 split). On failure, surviving busbar takes 100%.',triple:'Triple: 2 active busbars (50/50) + 1 catcher (0% normal). On failure, catcher picks up the lost 50%.',quad:'Quad: 2 pairs (A/B + C/D), each pair shares 50% of row (25% each). Failure of A transfers only to B, not C/D.'};
+var SL='ABCDEFGHIJ',rowLoads=[],allocData=[],otherData=[],nStrings=5,nRows=10,mode='dual';
+var MODES={dual:'Dual: 2 busbars per row (50/50). On failure, survivor takes 100%.',triple:'Triple: 2 active (50/50) + 1 catcher (0%). On failure, catcher picks up lost 50%.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
 function fmt(n){return n>=10?Math.round(n).toLocaleString('en'):n.toFixed(1);}
 function fmtD(n){return n.toFixed(1);}
 
-function genPairDual(nS,nR){var p=[];var s=gs();for(var i=0;i<nR;i++){var pi=(i*2)%nS;var bi=(i*2+1)%nS;if(bi===pi)bi=(bi+1)%nS;p.push({load:0,a:s[pi],b:s[bi]});}return p;}
-
-function genPairTriple(nS,nR){
-  var p=[];var s=gs();
-  var catcherIdx=0;
-  for(var i=0;i<nR;i++){
-    var pi=(i*2)%nS;var si=(i*2+1)%nS;
-    if(si===pi)si=(si+1)%nS;
-    var ci=catcherIdx%nS;
-    var tries=0;
-    while((ci===pi||ci===si)&&tries<nS){ci=(ci+1)%nS;tries++;}
-    catcherIdx=ci+1;
-    p.push({load:0,a:s[pi],b:s[si],c:s[ci]});
-  }
-  return p;
-}
-
-function genPairQuad(nS,nR){var p=[];var s=gs();for(var i=0;i<nR;i++){var ai=(i*4)%nS;var bi=(i*4+1)%nS;if(bi===ai)bi=(bi+1)%nS;var ci=(i*4+2)%nS;if(ci===ai||ci===bi)ci=(ci+1)%nS;if(ci===ai||ci===bi)ci=(ci+1)%nS;var di=(i*4+3)%nS;if(di===ai||di===bi||di===ci)di=(di+1)%nS;if(di===ai||di===bi||di===ci)di=(di+1)%nS;if(di===ai||di===bi||di===ci)di=(di+1)%nS;p.push({load:0,a:s[ai%nS],b:s[bi%nS],c:s[ci%nS],d:s[di%nS]});}return p;}
-
-function genTables(){
+function genRows(){
   nStrings=parseInt(document.getElementById('numStrings').value);
   nRows=parseInt(document.getElementById('numRows').value);
-  mode=document.getElementById('distMode').value;
   var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;
-  var pairs;
-  if(mode==='dual')pairs=genPairDual(nStrings,nRows);
-  else if(mode==='triple')pairs=genPairTriple(nStrings,nRows);
-  else pairs=genPairQuad(nStrings,nRows);
-  var oldRowData=rowData.slice();
-  var sameRows=oldRowData.length===nRows;
-  var oldTotal=0;for(var k=0;k<oldRowData.length;k++)oldTotal+=oldRowData[k].load;
-  var sameLoad=sameRows&&Math.abs(oldTotal-itKW)<0.5;
-  rowData=[];
-  for(var i=0;i<nRows;i++){pairs[i].load=sameLoad?oldRowData[i].load:perRow;rowData.push(pairs[i]);}
-  var oldOther=otherData.slice();
-  otherData=[];
-  for(var i=0;i<nStrings;i++){
-    if(oldOther[i])otherData.push({mech:oldOther[i].mech,pumps:oldOther[i].pumps,misc:oldOther[i].misc});
-    else otherData.push({mech:0,pumps:0,misc:0});
-  }
-  renderRowTable();renderOtherTable();
-  document.getElementById('configSection').style.display='block';
+  var oldLoads=rowLoads.slice();
+  if(oldLoads.length===nRows){var oldT=0;for(var k=0;k<oldLoads.length;k++)oldT+=oldLoads[k];if(Math.abs(oldT-itKW)<0.5){rowLoads=oldLoads;}else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}}
+  else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}
+  var oldO=otherData.slice();otherData=[];
+  for(var i=0;i<nStrings;i++){if(oldO[i])otherData.push({mech:oldO[i].mech,pumps:oldO[i].pumps,misc:oldO[i].misc});else otherData.push({mech:0,pumps:0,misc:0});}
+  renderRowLoads();renderOtherTable();
+  document.getElementById('rowSection').classList.remove('hidden');
+  document.getElementById('allocSection').classList.add('hidden');
   document.getElementById('results').style.display='none';
 }
-function selOpts(strings,sel){var h='';for(var j=0;j<strings.length;j++)h+='<option'+(strings[j]===sel?' selected':'')+'>'+strings[j]+'</option>';return h;}
-function renderRowTable(){
-  var strings=gs();var rh=document.getElementById('rowHead');var tb=document.getElementById('rowBody');var total=0;
+function renderRowLoads(){
+  var tb=document.getElementById('rowBody');var html='';var total=0;
+  for(var i=0;i<rowLoads.length;i++){total+=rowLoads[i];html+='<tr><td>'+(i+1)+'</td><td><input type="number" data-ri="'+i+'" value="'+rowLoads[i]+'" step="1" min="0"></td></tr>';}
+  tb.innerHTML=html;
+  document.getElementById('rowTotal').textContent='Total: '+fmt(total)+' kW ('+fmtD(total/1000)+' MW)';
+  tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
+    var ri=parseInt(e.target.getAttribute('data-ri'));rowLoads[ri]=parseFloat(e.target.value)||0;
+    var t=0;for(var j=0;j<rowLoads.length;j++)t+=rowLoads[j];
+    document.getElementById('rowTotal').textContent='Total: '+fmt(t)+' kW ('+fmtD(t/1000)+' MW)';
+  });});
+}
+function resetUniform(){var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;for(var i=0;i<rowLoads.length;i++)rowLoads[i]=perRow;renderRowLoads();}
+function autoAllocate(){
+  mode=document.getElementById('distMode').value;
+  nStrings=parseInt(document.getElementById('numStrings').value);
+  var strings=gs();
+  var indexed=[];for(var i=0;i<rowLoads.length;i++)indexed.push({idx:i,load:rowLoads[i]});
+  indexed.sort(function(a,b){return b.load-a.load;});
+  var sLoad={};for(var i=0;i<strings.length;i++)sLoad[strings[i]]=0;
+  allocData=[];for(var i=0;i<rowLoads.length;i++)allocData.push({load:rowLoads[i],a:'',b:'',c:'',d:''});
+
+  if(mode==='dual'){
+    for(var k=0;k<indexed.length;k++){
+      var ri=indexed[k].idx;var rl=indexed[k].load;var half=rl/2;
+      var sorted=strings.slice().sort(function(a,b){return sLoad[a]-sLoad[b];});
+      allocData[ri].a=sorted[0];allocData[ri].b=sorted[1];
+      sLoad[sorted[0]]+=half;sLoad[sorted[1]]+=half;
+    }
+  }else if(mode==='triple'){
+    var catchCount={};for(var i=0;i<strings.length;i++)catchCount[strings[i]]=0;
+    for(var k=0;k<indexed.length;k++){
+      var ri=indexed[k].idx;var rl=indexed[k].load;var half=rl/2;
+      var sorted=strings.slice().sort(function(a,b){return sLoad[a]-sLoad[b];});
+      var p=sorted[0],s=sorted[1];
+      var cSorted=strings.slice().filter(function(x){return x!==p&&x!==s;}).sort(function(a,b){return catchCount[a]-catchCount[b];});
+      var c=cSorted[0];
+      allocData[ri].a=p;allocData[ri].b=s;allocData[ri].c=c;
+      sLoad[p]+=half;sLoad[s]+=half;catchCount[c]++;
+    }
+  }else{
+    for(var k=0;k<indexed.length;k++){
+      var ri=indexed[k].idx;var rl=indexed[k].load;var q=rl/4;
+      var sorted=strings.slice().sort(function(a,b){return sLoad[a]-sLoad[b];});
+      allocData[ri].a=sorted[0];allocData[ri].b=sorted[1];
+      allocData[ri].c=sorted[2];allocData[ri].d=sorted[3];
+      sLoad[sorted[0]]+=q;sLoad[sorted[1]]+=q;sLoad[sorted[2]]+=q;sLoad[sorted[3]]+=q;
+    }
+  }
+  renderAllocTable(sLoad);
+  document.getElementById('allocSection').classList.remove('hidden');
+}
+
+function selO(strings,sel){var h='';for(var j=0;j<strings.length;j++)h+='<option'+(strings[j]===sel?' selected':'')+'>'+strings[j]+'</option>';return h;}
+function renderAllocTable(sLoad){
+  var strings=gs();
+  var ah=document.getElementById('allocHead');
   var hh='<tr><th>Row</th><th>Load (kW)</th>';
-  if(mode==='dual'){hh+='<th>Primary</th><th>Backup</th>';document.getElementById('rowHint').textContent='Each row splits load 50/50 between Primary and Backup.';}
-  else if(mode==='triple'){hh+='<th>Primary</th><th>Secondary</th><th>Catcher</th>';document.getElementById('rowHint').textContent='Primary & Secondary share 50/50. Catcher carries 0 normally, picks up on failure.';}
-  else{hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th>';document.getElementById('rowHint').textContent='A/B pair shares 50% (25% each). C/D pair shares 50% (25% each). Failure transfers within pair only.';}
-  hh+='</tr>';rh.innerHTML=hh;
-  var html='';
-  for(var i=0;i<rowData.length;i++){
-    var r=rowData[i];total+=r.load;
-    html+='<tr><td>'+(i+1)+'</td><td><input type="number" data-ri="'+i+'" data-f="load" value="'+r.load+'" step="1" min="0"></td>';
-    html+='<td><select data-ri="'+i+'" data-f="a">'+selOpts(strings,r.a)+'</select></td>';
-    html+='<td><select data-ri="'+i+'" data-f="b">'+selOpts(strings,r.b)+'</select></td>';
-    if(mode==='triple')html+='<td><select data-ri="'+i+'" data-f="c">'+selOpts(strings,r.c)+'</select></td>';
-    if(mode==='quad'){html+='<td><select data-ri="'+i+'" data-f="c">'+selOpts(strings,r.c)+'</select></td>';html+='<td><select data-ri="'+i+'" data-f="d">'+selOpts(strings,r.d)+'</select></td>';}
+  if(mode==='dual')hh+='<th>Primary</th><th>Backup</th>';
+  else if(mode==='triple')hh+='<th>Primary</th><th>Secondary</th><th>Catcher</th>';
+  else hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th>';
+  hh+='</tr>';ah.innerHTML=hh;
+  var ab=document.getElementById('allocBody');var html='';
+  for(var i=0;i<allocData.length;i++){
+    var r=allocData[i];
+    html+='<tr><td>'+(i+1)+'</td><td class="v">'+fmt(r.load)+'</td>';
+    html+='<td><select data-ai="'+i+'" data-f="a">'+selO(strings,r.a)+'</select></td>';
+    html+='<td><select data-ai="'+i+'" data-f="b">'+selO(strings,r.b)+'</select></td>';
+    if(mode==='triple')html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';
+    if(mode==='quad'){html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="d">'+selO(strings,r.d)+'</select></td>';}
     html+='</tr>';
   }
-  tb.innerHTML=html;
-  document.getElementById('rowTotal').textContent='Total IT Load: '+fmt(total)+' kW ('+fmtD(total/1000)+' MW)';
-  tb.querySelectorAll('input,select').forEach(function(el){el.addEventListener('change',onRowChange);});
+  ab.innerHTML=html;
+  ab.querySelectorAll('select').forEach(function(el){el.addEventListener('change',function(e){
+    var ai=parseInt(e.target.getAttribute('data-ai'));var f=e.target.getAttribute('data-f');
+    allocData[ai][f]=e.target.value;recalcBalance();
+  });});
+  if(!sLoad){sLoad={};for(var i=0;i<strings.length;i++)sLoad[strings[i]]=0;recalcBalanceFromData(sLoad);}
+  showBalance(sLoad);
 }
-function onRowChange(e){
-  var ri=parseInt(e.target.getAttribute('data-ri'));var f=e.target.getAttribute('data-f');
-  if(f==='load')rowData[ri].load=parseFloat(e.target.value)||0;
-  else rowData[ri][f]=e.target.value;
-  var total=0;for(var i=0;i<rowData.length;i++)total+=rowData[i].load;
-  document.getElementById('rowTotal').textContent='Total IT Load: '+fmt(total)+' kW ('+fmtD(total/1000)+' MW)';
+
+function recalcBalance(){
+  var strings=gs();var sLoad={};for(var i=0;i<strings.length;i++)sLoad[strings[i]]=0;
+  recalcBalanceFromData(sLoad);showBalance(sLoad);
+}
+function recalcBalanceFromData(sLoad){
+  for(var i=0;i<allocData.length;i++){
+    var r=allocData[i];
+    if(mode==='dual'){sLoad[r.a]+=r.load/2;sLoad[r.b]+=r.load/2;}
+    else if(mode==='triple'){sLoad[r.a]+=r.load/2;sLoad[r.b]+=r.load/2;}
+    else{sLoad[r.a]+=r.load/4;sLoad[r.b]+=r.load/4;sLoad[r.c]+=r.load/4;sLoad[r.d]+=r.load/4;}
+  }
+}
+function showBalance(sLoad){
+  var strings=gs();var html='<strong>Normal IT Load per String:</strong> ';
+  var vals=[];for(var i=0;i<strings.length;i++){vals.push(sLoad[strings[i]]);html+=strings[i]+': '+fmt(sLoad[strings[i]])+' kW &nbsp; ';}
+  var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals);
+  var imb=mn>0?((mx-mn)/mn*100):0;
+  html+='<br><strong>Imbalance:</strong> <span class="'+(imb>10?'cr':(imb>5?'wr':'ok'))+'">'+fmtD(imb)+'%</span> (max '+fmt(mx)+' / min '+fmt(mn)+')';
+  document.getElementById('balanceInfo').innerHTML=html;
 }
 function renderOtherTable(){
   var strings=gs();var tb=document.getElementById('otherBody');var html='';
-  for(var i=0;i<otherData.length;i++){
-    var o=otherData[i];var tot=o.mech+o.pumps+o.misc;
+  for(var i=0;i<otherData.length;i++){var o=otherData[i];var tot=o.mech+o.pumps+o.misc;
     html+='<tr><td><strong>'+strings[i]+'</strong></td>';
     html+='<td><input type="number" data-oi="'+i+'" data-f="mech" value="'+o.mech+'" step="1" min="0"></td>';
     html+='<td><input type="number" data-oi="'+i+'" data-f="pumps" value="'+o.pumps+'" step="1" min="0"></td>';
     html+='<td><input type="number" data-oi="'+i+'" data-f="misc" value="'+o.misc+'" step="1" min="0"></td>';
-    html+='<td class="v">'+fmt(tot)+'</td></tr>';
-  }
+    html+='<td class="v">'+fmt(tot)+'</td></tr>';}
   tb.innerHTML=html;
-  tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',onOtherChange);});
+  tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
+    var oi=parseInt(e.target.getAttribute('data-oi'));var f=e.target.getAttribute('data-f');
+    otherData[oi][f]=parseFloat(e.target.value)||0;renderOtherTable();});});
 }
-function onOtherChange(e){var oi=parseInt(e.target.getAttribute('data-oi'));var f=e.target.getAttribute('data-f');otherData[oi][f]=parseFloat(e.target.value)||0;renderOtherTable();}
-function resetUniform(){var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;for(var i=0;i<rowData.length;i++)rowData[i].load=perRow;renderRowTable();}
-function calcITperString(failString){
-  var strings=gs();var load={};
-  for(var i=0;i<strings.length;i++)load[strings[i]]=0;
-  for(var i=0;i<rowData.length;i++){
-    var r=rowData[i];
+
+function calcIT(failString){
+  var strings=gs();var load={};for(var i=0;i<strings.length;i++)load[strings[i]]=0;
+  for(var i=0;i<allocData.length;i++){
+    var r=allocData[i];
     if(mode==='dual'){
-      var p=r.a,b=r.b;
-      if(failString&&p===failString){load[b]+=r.load;}
-      else if(failString&&b===failString){load[p]+=r.load;}
-      else{load[p]+=r.load/2;load[b]+=r.load/2;}
+      if(failString&&r.a===failString){load[r.b]+=r.load;}
+      else if(failString&&r.b===failString){load[r.a]+=r.load;}
+      else{load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
     }else if(mode==='triple'){
-      var p=r.a,s=r.b,c=r.c;
-      if(failString&&p===failString){load[s]+=r.load/2;load[c]+=r.load/2;}
-      else if(failString&&s===failString){load[p]+=r.load/2;load[c]+=r.load/2;}
-      else if(failString&&c===failString){load[p]+=r.load/2;load[s]+=r.load/2;}
-      else{load[p]+=r.load/2;load[s]+=r.load/2;}
+      if(failString&&r.a===failString){load[r.b]+=r.load/2;load[r.c]+=r.load/2;}
+      else if(failString&&r.b===failString){load[r.a]+=r.load/2;load[r.c]+=r.load/2;}
+      else if(failString&&r.c===failString){load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
+      else{load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
     }else{
-      var fa=r.a,fb=r.b,fc=r.c,fd=r.d;
-      var abShare=r.load/2;var cdShare=r.load/2;
-      if(failString===fa){load[fb]+=abShare;}
-      else if(failString===fb){load[fa]+=abShare;}
-      else{load[fa]+=abShare/2;load[fb]+=abShare/2;}
-      if(failString===fc){load[fd]+=cdShare;}
-      else if(failString===fd){load[fc]+=cdShare;}
-      else{load[fc]+=cdShare/2;load[fd]+=cdShare/2;}
+      var ab=r.load/2,cd=r.load/2;
+      if(failString===r.a)load[r.b]+=ab;else if(failString===r.b)load[r.a]+=ab;else{load[r.a]+=ab/2;load[r.b]+=ab/2;}
+      if(failString===r.c)load[r.d]+=cd;else if(failString===r.d)load[r.c]+=cd;else{load[r.c]+=cd/2;load[r.d]+=cd/2;}
     }
   }
-  if(failString)delete load[failString];
-  return load;
+  if(failString)delete load[failString];return load;
 }
 
 function calculate(){
+  if(allocData.length===0){alert('Complete Step 1 and Step 2 first.');return;}
   var strings=gs();
   var chg=parseFloat(document.getElementById('upsCharge').value)/100;
   var loss=parseFloat(document.getElementById('upsLoss').value)/100;
   var pf=parseFloat(document.getElementById('pf').value);
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).sort(function(a,b){return a-b;});
+  var scenarios={};scenarios['Normal']=calcIT(null);
+  for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
+  var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.pumps+o.misc;}
 
-  var scenarios={};
-  scenarios['Normal']=calcITperString(null);
-  for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcITperString(strings[i]);
-
-  var otherLoad={};
-  for(var i=0;i<strings.length;i++){var o=otherData[i];otherLoad[strings[i]]=o.mech+o.pumps+o.misc;}
-
-  var nb=document.getElementById('normalBody');var nhtml='';
-  var normalIT=scenarios['Normal'];
-  for(var i=0;i<strings.length;i++){
-    var s=strings[i];var it=normalIT[s]||0;var oth=otherLoad[s]||0;
-    var upsOut=it;var upsIn=upsOut*(1+chg+loss);var genKW=upsIn+oth;var genKVA=genKW/pf;
-    nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(upsOut)+'</td><td>'+fmt(upsIn)+'</td><td class="v">'+fmt(genKW)+'</td><td>'+fmt(genKVA)+'</td></tr>';
-  }
+  var nb=document.getElementById('normalBody');var nhtml='';var normalIT=scenarios['Normal'];
+  for(var i=0;i<strings.length;i++){var s=strings[i];var it=normalIT[s]||0;var oth=oLoad[s]||0;
+    var uo=it,ui=uo*(1+chg+loss),gk=ui+oth,gv=gk/pf;
+    nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
   nb.innerHTML=nhtml;
 
   var mh=document.getElementById('matrixHead');var mb=document.getElementById('matrixBody');
-  var hhtml='<tr><th>String</th><th>Normal</th>';
-  for(var i=0;i<strings.length;i++)hhtml+='<th>'+strings[i]+' Fails</th>';
-  hhtml+='<th>Worst Case</th></tr>';mh.innerHTML=hhtml;
-
-  var worstOverall={val:0,str:'',scen:''};var worstPerString={};var mhtml='';
-  for(var i=0;i<strings.length;i++){
-    var s=strings[i];var best=0;var bestScen='Normal';
+  var hh='<tr><th>String</th><th>Normal</th>';for(var i=0;i<strings.length;i++)hh+='<th>'+strings[i]+' Fails</th>';hh+='<th>Worst Case</th></tr>';mh.innerHTML=hh;
+  var wO={val:0,str:'',scen:''},wPS={},mhtml='';
+  for(var i=0;i<strings.length;i++){var s=strings[i];var best=0,bestS='Normal';
     mhtml+='<tr><td><strong>'+s+'</strong></td>';
-    var scenKeys=['Normal'];for(var j=0;j<strings.length;j++)scenKeys.push(strings[j]+' Fails');
-    for(var k=0;k<scenKeys.length;k++){
-      var sk=scenKeys[k];var sc=scenarios[sk];
-      if(sk===s+' Fails'){mhtml+='<td style="color:#555">—</td>';continue;}
-      var val=sc[s]||0;if(val>best){best=val;bestScen=sk;}
-      mhtml+='<td>'+fmt(val)+'</td>';
-    }
-    worstPerString[s]={val:best,scen:bestScen};
-    if(best>worstOverall.val){worstOverall.val=best;worstOverall.str=s;worstOverall.scen=bestScen;}
-    var tagClass=best>normalIT[s]*1.3?'tc':(best>normalIT[s]*1.1?'tw':'to');
-    mhtml+='<td><span class="tg '+tagClass+'">'+fmt(best)+' kW</span> '+bestScen+'</td></tr>';
-  }
+    var sk=['Normal'];for(var j=0;j<strings.length;j++)sk.push(strings[j]+' Fails');
+    for(var k=0;k<sk.length;k++){var sc=scenarios[sk[k]];
+      if(sk[k]===s+' Fails'){mhtml+='<td style="color:#555">—</td>';continue;}
+      var val=sc[s]||0;if(val>best){best=val;bestS=sk[k];}mhtml+='<td>'+fmt(val)+'</td>';}
+    wPS[s]={val:best,scen:bestS};if(best>wO.val){wO.val=best;wO.str=s;wO.scen=bestS;}
+    var tc=best>normalIT[s]*1.3?'tc':(best>normalIT[s]*1.1?'tw':'to');
+    mhtml+='<td><span class="tg '+tc+'">'+fmt(best)+'kW</span> '+bestS+'</td></tr>';}
   mb.innerHTML=mhtml;
 
   var sb=document.getElementById('sizingBody');var shtml='';
-  for(var i=0;i<strings.length;i++){
-    var s=strings[i];var w=worstPerString[s];var oth=otherLoad[s]||0;
-    var upsOut=w.val;var upsIn=upsOut*(1+chg+loss);var genKW=upsIn+oth;var genKVA=genKW/pf;
-    var txLoad=genKVA*(1+infraL);var txRating=txR[txR.length-1];
-    for(var t=0;t<txR.length;t++){if(txR[t]>=txLoad){txRating=txR[t];break;}}
-    var isCrit=s===worstOverall.str;var cls=isCrit?'cr':'v';
-    shtml+='<tr><td><strong>'+s+'</strong>'+(isCrit?' <span class="tg tc">CRITICAL</span>':'')+'</td>';
-    shtml+='<td class="'+cls+'">'+fmt(upsOut)+'</td><td>'+fmt(upsIn)+'</td>';
-    shtml+='<td class="'+cls+'">'+fmt(genKW)+'</td><td>'+fmt(genKVA)+'</td>';
-    shtml+='<td class="v">'+txRating+'</td><td>'+w.scen+'</td></tr>';
-  }
+  for(var i=0;i<strings.length;i++){var s=strings[i];var w=wPS[s];var oth=oLoad[s]||0;
+    var uo=w.val,ui=uo*(1+chg+loss),gk=ui+oth,gv=gk/pf;
+    var txL=gv*(1+infraL),txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
+    var ic=s===wO.str,cl=ic?'cr':'v';
+    shtml+='<tr><td><strong>'+s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td>';
+    shtml+='<td class="'+cl+'">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="'+cl+'">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td><td class="v">'+txRt+'</td><td>'+w.scen+'</td></tr>';}
   sb.innerHTML=shtml;
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
 function exportXML(){
-  var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool>\n';
-  x+='  <params>\n';
-  x+='    <itLoad>'+document.getElementById('itLoad').value+'</itLoad>\n';
-  x+='    <loadUnit>'+document.getElementById('loadUnit').value+'</loadUnit>\n';
-  x+='    <numStrings>'+document.getElementById('numStrings').value+'</numStrings>\n';
-  x+='    <numRows>'+document.getElementById('numRows').value+'</numRows>\n';
-  x+='    <distMode>'+document.getElementById('distMode').value+'</distMode>\n';
-  x+='    <upsCharge>'+document.getElementById('upsCharge').value+'</upsCharge>\n';
-  x+='    <upsLoss>'+document.getElementById('upsLoss').value+'</upsLoss>\n';
-  x+='    <pf>'+document.getElementById('pf').value+'</pf>\n';
-  x+='    <infraLoss>'+document.getElementById('infraLoss').value+'</infraLoss>\n';
-  x+='    <txRatings>'+document.getElementById('txRatings').value+'</txRatings>\n';
-  x+='  </params>\n';
-  x+='  <rows>\n';
-  for(var i=0;i<rowData.length;i++){
-    var r=rowData[i];
+  if(allocData.length===0){alert('Generate and allocate first.');return;}
+  var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool>\n  <params>\n';
+  var ids=['itLoad','loadUnit','numStrings','numRows','upsCharge','upsLoss','pf','infraLoss','txRatings'];
+  for(var i=0;i<ids.length;i++)x+='    <'+ids[i]+'>'+document.getElementById(ids[i]).value+'</'+ids[i]+'>\n';
+  x+='    <distMode>'+mode+'</distMode>\n  </params>\n  <rows>\n';
+  for(var i=0;i<allocData.length;i++){var r=allocData[i];
     x+='    <row num="'+(i+1)+'" load="'+r.load+'" a="'+r.a+'" b="'+r.b+'"';
-    if(r.c)x+=' c="'+r.c+'"';
-    if(r.d)x+=' d="'+r.d+'"';
-    x+='/>\n';
-  }
-  x+='  </rows>\n';
-  x+='  <otherLoads>\n';
-  var strings=gs();
-  for(var i=0;i<otherData.length;i++){
-    var o=otherData[i];
-    x+='    <string id="'+strings[i]+'" mech="'+o.mech+'" pumps="'+o.pumps+'" misc="'+o.misc+'"/>\n';
-  }
-  x+='  </otherLoads>\n';
-  x+='</DCFailureTool>';
-  var blob=new Blob([x],{type:'application/xml'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='dc-failure-scenario.xml';a.click();URL.revokeObjectURL(a.href);
+    if(r.c)x+=' c="'+r.c+'"';if(r.d)x+=' d="'+r.d+'"';x+='/>\n';}
+  x+='  </rows>\n  <otherLoads>\n';var strings=gs();
+  for(var i=0;i<otherData.length;i++){var o=otherData[i];x+='    <string id="'+strings[i]+'" mech="'+o.mech+'" pumps="'+o.pumps+'" misc="'+o.misc+'"/>\n';}
+  x+='  </otherLoads>\n</DCFailureTool>';
+  var blob=new Blob([x],{type:'application/xml'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario.xml';a.click();
 }
-
 function importXML(file){
-  var reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      var parser=new DOMParser();
-      var doc=parser.parseFromString(e.target.result,'text/xml');
-      var p=doc.querySelector('params');
-      if(p){
-        var gv=function(t){var el=p.querySelector(t);return el?el.textContent:'';};
-        document.getElementById('itLoad').value=gv('itLoad');
-        document.getElementById('loadUnit').value=gv('loadUnit');
-        document.getElementById('numStrings').value=gv('numStrings');
-        document.getElementById('numRows').value=gv('numRows');
-        document.getElementById('distMode').value=gv('distMode');
-        document.getElementById('upsCharge').value=gv('upsCharge');
-        document.getElementById('upsLoss').value=gv('upsLoss');
-        document.getElementById('pf').value=gv('pf');
-        document.getElementById('infraLoss').value=gv('infraLoss');
-        document.getElementById('txRatings').value=gv('txRatings');
-      }
-      nStrings=parseInt(document.getElementById('numStrings').value);
-      nRows=parseInt(document.getElementById('numRows').value);
-      mode=document.getElementById('distMode').value;
-      document.getElementById('modeDesc').textContent=MODES[mode];
-      var rows=doc.querySelectorAll('rows row');
-      rowData=[];
-      for(var i=0;i<rows.length;i++){
-        var r=rows[i];
-        var rd={load:parseFloat(r.getAttribute('load'))||0,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B'};
-        if(r.getAttribute('c'))rd.c=r.getAttribute('c');
-        if(r.getAttribute('d'))rd.d=r.getAttribute('d');
-        rowData.push(rd);
-      }
-      var oLoads=doc.querySelectorAll('otherLoads string');
-      otherData=[];
-      for(var i=0;i<oLoads.length;i++){
-        var ol=oLoads[i];
-        otherData.push({mech:parseFloat(ol.getAttribute('mech'))||0,pumps:parseFloat(ol.getAttribute('pumps'))||0,misc:parseFloat(ol.getAttribute('misc'))||0});
-      }
-      renderRowTable();renderOtherTable();
-      document.getElementById('configSection').style.display='block';
-      document.getElementById('results').style.display='none';
-    }catch(err){alert('Error loading XML: '+err.message);}
-  };
-  reader.readAsText(file);
+  var reader=new FileReader();reader.onload=function(e){try{
+    var doc=new DOMParser().parseFromString(e.target.result,'text/xml');var p=doc.querySelector('params');
+    if(p){var gv=function(t){var el=p.querySelector(t);return el?el.textContent:'';};
+      var ids=['itLoad','loadUnit','numStrings','numRows','upsCharge','upsLoss','pf','infraLoss','txRatings'];
+      for(var i=0;i<ids.length;i++){var v=gv(ids[i]);if(v)document.getElementById(ids[i]).value=v;}
+      mode=gv('distMode')||'dual';document.getElementById('distMode').value=mode;document.getElementById('modeDesc').textContent=MODES[mode];}
+    nStrings=parseInt(document.getElementById('numStrings').value);nRows=parseInt(document.getElementById('numRows').value);
+    var rows=doc.querySelectorAll('rows row');rowLoads=[];allocData=[];
+    for(var i=0;i<rows.length;i++){var r=rows[i];var ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);
+      var rd={load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||''};allocData.push(rd);}
+    var oL=doc.querySelectorAll('otherLoads string');otherData=[];
+    for(var i=0;i<oL.length;i++){var ol=oL[i];otherData.push({mech:parseFloat(ol.getAttribute('mech'))||0,pumps:parseFloat(ol.getAttribute('pumps'))||0,misc:parseFloat(ol.getAttribute('misc'))||0});}
+    renderRowLoads();renderAllocTable(null);recalcBalance();renderOtherTable();
+    document.getElementById('rowSection').classList.remove('hidden');document.getElementById('allocSection').classList.remove('hidden');
+    document.getElementById('results').style.display='none';
+  }catch(err){alert('Error: '+err.message);}};reader.readAsText(file);
 }
 
 document.addEventListener('DOMContentLoaded',function(){
-  document.getElementById('btnGenTables').addEventListener('click',genTables);
+  document.getElementById('btnGenRows').addEventListener('click',genRows);
   document.getElementById('btnUniform').addEventListener('click',resetUniform);
+  document.getElementById('btnAllocate').addEventListener('click',autoAllocate);
   document.getElementById('btnCalc').addEventListener('click',calculate);
   document.getElementById('btnPrint').addEventListener('click',function(){window.print();});
   document.getElementById('distMode').addEventListener('change',function(){document.getElementById('modeDesc').textContent=MODES[this.value];});
-  document.getElementById('btnExport').addEventListener('click',function(){
-    if(rowData.length===0){alert('Generate tables first before saving.');return;}
-    exportXML();
-  });
+  document.getElementById('btnExport').addEventListener('click',exportXML);
   document.getElementById('btnImport').addEventListener('click',function(){document.getElementById('fileInput').click();});
   document.getElementById('fileInput').addEventListener('change',function(e){if(e.target.files[0])importXML(e.target.files[0]);e.target.value='';});
 });
