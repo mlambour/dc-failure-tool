@@ -96,6 +96,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <div id="modeDesc" class="md">Dual: Each row fed by 2 busbars (50/50 split). On failure, surviving busbar takes 100%.</div>
 <div class="br" style="margin-top:10px">
 <button class="btn bp bsm" id="btnAllocate">Auto-Balance Allocation</button>
+<button class="btn bs bsm" id="btnRetain">Recalculate (Keep Current Pairings)</button>
 </div>
 <div id="allocSection" class="hidden">
 <div class="sx" style="margin-top:10px"><table class="et" id="allocTable"><thead id="allocHead"></thead><tbody id="allocBody"></tbody></table></div>
@@ -200,6 +201,16 @@ function autoAllocate(){
     }
   }
   renderAllocTable(sLoad);
+  document.getElementById('allocSection').classList.remove('hidden');
+}
+
+function retainAlloc(){
+  mode=document.getElementById('distMode').value;
+  if(allocData.length===0){alert('Run Auto-Balance first to create an initial allocation.');return;}
+  for(var i=0;i<allocData.length;i++){
+    allocData[i].load=rowLoads[i]!==undefined?rowLoads[i]:allocData[i].load;
+  }
+  renderAllocTable(null);recalcBalance();
   document.getElementById('allocSection').classList.remove('hidden');
 }
 
@@ -380,6 +391,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnGenRows').addEventListener('click',genRows);
   document.getElementById('btnUniform').addEventListener('click',resetUniform);
   document.getElementById('btnAllocate').addEventListener('click',autoAllocate);
+  document.getElementById('btnRetain').addEventListener('click',retainAlloc);
   document.getElementById('btnCalc').addEventListener('click',calculate);
   document.getElementById('btnPrint').addEventListener('click',function(){window.print();});
   document.getElementById('distMode').addEventListener('change',function(){document.getElementById('modeDesc').textContent=MODES[this.value];});
