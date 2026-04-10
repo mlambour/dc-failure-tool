@@ -91,7 +91,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <div class="cd" id="step2Card">
 <h2><span class="step s2">STEP 2</span> Busbar Distribution & String Allocation</h2>
 <div class="fr">
-<div class="fg"><label>Distribution Mode</label><select id="distMode"><option value="dual">Dual (A/B)</option><option value="triple">Triple (A/B + Catcher)</option><option value="quad">Quad (A/B + C/D)</option></select></div>
+<div class="fg"><label>Distribution Mode</label><select id="distMode"><option value="dual">Dual (A/B)</option><option value="triple">Triple (A/B + Catcher)</option><option value="quad">Quad (A/B + C/D)</option><option value="quint">Quint (A/B + C/D + Catcher)</option></select></div>
 </div>
 <div id="modeDesc" class="md">Dual: Each row fed by 2 busbars (50/50 split). On failure, surviving busbar takes 100%.</div>
 <div class="br" style="margin-top:10px">
@@ -120,7 +120,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 </div>
 <script>
 var SL='ABCDEFGHIJ',rowLoads=[],allocData=[],otherData=[],nStrings=5,nRows=10,mode='dual';
-var MODES={dual:'Dual: 2 busbars per row (50/50). On failure, survivor takes 100%.',triple:'Triple: 2 active (50/50) + 1 catcher (0%). On failure, catcher picks up lost 50%.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.'};
+var MODES={dual:'Dual: 2 busbars per row (50/50). On failure, survivor takes 100%.',triple:'Triple: 2 active (50/50) + 1 catcher (0%). On failure, catcher picks up lost 50%.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: 2 pairs (A/B+C/D) at 25% each + catcher at 0%. On failure, catcher absorbs the lost 25%. Active strings stay at 25%.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
 function fmt(n){return n>=10?Math.round(n).toLocaleString('en'):n.toFixed(1);}
@@ -159,7 +159,7 @@ function autoAllocate(){
   var indexed=[];for(var i=0;i<rowLoads.length;i++)indexed.push({idx:i,load:rowLoads[i]});
   indexed.sort(function(a,b){return b.load-a.load;});
   var sLoad={};for(var i=0;i<strings.length;i++)sLoad[strings[i]]=0;
-  allocData=[];for(var i=0;i<rowLoads.length;i++)allocData.push({load:rowLoads[i],a:'',b:'',c:'',d:''});
+  allocData=[];for(var i=0;i<rowLoads.length;i++)allocData.push({load:rowLoads[i],a:'',b:'',c:'',d:'',e:''});
 
   if(mode==='dual'){
     for(var k=0;k<indexed.length;k++){
@@ -179,13 +179,24 @@ function autoAllocate(){
       allocData[ri].a=p;allocData[ri].b=s;allocData[ri].c=c;
       sLoad[p]+=half;sLoad[s]+=half;catchCount[c]++;
     }
-  }else{
+  }else if(mode==='quad'){
     for(var k=0;k<indexed.length;k++){
       var ri=indexed[k].idx;var rl=indexed[k].load;var q=rl/4;
       var sorted=strings.slice().sort(function(a,b){return sLoad[a]-sLoad[b];});
       allocData[ri].a=sorted[0];allocData[ri].b=sorted[1];
       allocData[ri].c=sorted[2];allocData[ri].d=sorted[3];
       sLoad[sorted[0]]+=q;sLoad[sorted[1]]+=q;sLoad[sorted[2]]+=q;sLoad[sorted[3]]+=q;
+    }
+  }else{
+    var catchCount={};for(var i=0;i<strings.length;i++)catchCount[strings[i]]=0;
+    for(var k=0;k<indexed.length;k++){
+      var ri=indexed[k].idx;var rl=indexed[k].load;var q=rl/4;
+      var sorted=strings.slice().sort(function(a,b){return sLoad[a]-sLoad[b];});
+      var fa=sorted[0],fb=sorted[1],fc=sorted[2],fd=sorted[3];
+      var cSorted=strings.slice().filter(function(x){return x!==fa&&x!==fb&&x!==fc&&x!==fd;}).sort(function(a,b){return catchCount[a]-catchCount[b];});
+      var ce=cSorted.length>0?cSorted[0]:sorted[4];
+      allocData[ri].a=fa;allocData[ri].b=fb;allocData[ri].c=fc;allocData[ri].d=fd;allocData[ri].e=ce;
+      sLoad[fa]+=q;sLoad[fb]+=q;sLoad[fc]+=q;sLoad[fd]+=q;catchCount[ce]++;
     }
   }
   renderAllocTable(sLoad);
@@ -199,7 +210,8 @@ function renderAllocTable(sLoad){
   var hh='<tr><th>Row</th><th>Load (kW)</th>';
   if(mode==='dual')hh+='<th>Primary</th><th>Backup</th>';
   else if(mode==='triple')hh+='<th>Primary</th><th>Secondary</th><th>Catcher</th>';
-  else hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th>';
+  else if(mode==='quad')hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th>';
+  else hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th><th>Catcher</th>';
   hh+='</tr>';ah.innerHTML=hh;
   var ab=document.getElementById('allocBody');var html='';
   for(var i=0;i<allocData.length;i++){
@@ -209,6 +221,7 @@ function renderAllocTable(sLoad){
     html+='<td><select data-ai="'+i+'" data-f="b">'+selO(strings,r.b)+'</select></td>';
     if(mode==='triple')html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';
     if(mode==='quad'){html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="d">'+selO(strings,r.d)+'</select></td>';}
+    if(mode==='quint'){html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="d">'+selO(strings,r.d)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="e">'+selO(strings,r.e)+'</select></td>';}
     html+='</tr>';
   }
   ab.innerHTML=html;
@@ -267,10 +280,21 @@ function calcIT(failString){
       else if(failString&&r.b===failString){load[r.a]+=r.load/2;load[r.c]+=r.load/2;}
       else if(failString&&r.c===failString){load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
       else{load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
-    }else{
+    }else if(mode==='quad'){
       var ab=r.load/2,cd=r.load/2;
       if(failString===r.a)load[r.b]+=ab;else if(failString===r.b)load[r.a]+=ab;else{load[r.a]+=ab/2;load[r.b]+=ab/2;}
       if(failString===r.c)load[r.d]+=cd;else if(failString===r.d)load[r.c]+=cd;else{load[r.c]+=cd/2;load[r.d]+=cd/2;}
+    }else{
+      var q=r.load/4;
+      var actives=[r.a,r.b,r.c,r.d],catcher=r.e;
+      if(failString===catcher){
+        for(var z=0;z<actives.length;z++)load[actives[z]]+=q;
+      }else if(actives.indexOf(failString)>=0){
+        load[catcher]+=q;
+        for(var z=0;z<actives.length;z++){if(actives[z]!==failString)load[actives[z]]+=q;}
+      }else{
+        for(var z=0;z<actives.length;z++)load[actives[z]]+=q;
+      }
     }
   }
   if(failString)delete load[failString];return load;
@@ -327,7 +351,7 @@ function exportXML(){
   x+='    <distMode>'+mode+'</distMode>\n  </params>\n  <rows>\n';
   for(var i=0;i<allocData.length;i++){var r=allocData[i];
     x+='    <row num="'+(i+1)+'" load="'+r.load+'" a="'+r.a+'" b="'+r.b+'"';
-    if(r.c)x+=' c="'+r.c+'"';if(r.d)x+=' d="'+r.d+'"';x+='/>\n';}
+    if(r.c)x+=' c="'+r.c+'"';if(r.d)x+=' d="'+r.d+'"';if(r.e)x+=' e="'+r.e+'"';x+='/>\n';}
   x+='  </rows>\n  <otherLoads>\n';var strings=gs();
   for(var i=0;i<otherData.length;i++){var o=otherData[i];x+='    <string id="'+strings[i]+'" mech="'+o.mech+'" pumps="'+o.pumps+'" misc="'+o.misc+'"/>\n';}
   x+='  </otherLoads>\n</DCFailureTool>';
@@ -343,7 +367,7 @@ function importXML(file){
     nStrings=parseInt(document.getElementById('numStrings').value);nRows=parseInt(document.getElementById('numRows').value);
     var rows=doc.querySelectorAll('rows row');rowLoads=[];allocData=[];
     for(var i=0;i<rows.length;i++){var r=rows[i];var ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);
-      var rd={load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||''};allocData.push(rd);}
+      var rd={load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''};allocData.push(rd);}
     var oL=doc.querySelectorAll('otherLoads string');otherData=[];
     for(var i=0;i<oL.length;i++){var ol=oL[i];otherData.push({mech:parseFloat(ol.getAttribute('mech'))||0,pumps:parseFloat(ol.getAttribute('pumps'))||0,misc:parseFloat(ol.getAttribute('misc'))||0});}
     renderRowLoads();renderAllocTable(null);recalcBalance();renderOtherTable();
