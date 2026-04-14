@@ -51,6 +51,16 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 .sumc h3{font-size:0.8rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px}
 .sumv{font-size:1.2rem;font-weight:700;color:var(--accent);margin-bottom:4px}
 .sums{font-size:0.82rem;color:var(--text2)}
+.warnbox{margin-top:10px;display:flex;flex-direction:column;gap:10px}
+.warn{padding:12px 14px;border-radius:10px;border:1px solid var(--border);font-size:0.85rem}
+.warn strong{display:block;margin-bottom:4px}
+.warn.warn-high{background:rgba(239,83,80,0.12);border-color:rgba(239,83,80,0.35);color:#ffc9c7}
+.warn.warn-med{background:rgba(255,167,38,0.12);border-color:rgba(255,167,38,0.35);color:#ffe0b2}
+.warn.warn-low{background:rgba(0,180,216,0.12);border-color:rgba(0,180,216,0.35);color:#b3ecf7}
+.det{margin-top:10px;padding:12px 14px;background:#0d1321;border:1px solid var(--border);border-radius:10px}
+.det summary{cursor:pointer;font-weight:700;color:var(--accent)}
+.det ul{margin:10px 0 0 18px;color:var(--text2);font-size:0.85rem}
+.det li{margin-bottom:6px}
 .hidden{display:none}
 @media print{body{background:#fff;color:#000;padding:10px}.cd{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}.sumc{background:#fff;border:1px solid #ccc}}
 @media(max-width:700px){body{padding:10px}.cd{padding:14px}.fr{flex-direction:column}h1{font-size:1.3rem}}
@@ -121,6 +131,24 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <div class="cd">
 <h2>🧾 Executive Summary</h2>
 <div class="sumg" id="execSummary"></div>
+<div class="warnbox" id="warningBox"></div>
+</div>
+<div class="cd">
+<h2>📘 Assumptions & Methodology</h2>
+<details class="det">
+<summary>Show calculation assumptions</summary>
+<ul>
+<li>UPS sizing is based on <strong>IT load only</strong>; mechanical, pumps, and miscellaneous loads are fixed non-IT loads per string.</li>
+<li>Mechanical / cooling / pump / miscellaneous loads <strong>do not redistribute</strong> during failure scenarios.</li>
+<li>UPS input power is calculated from UPS output plus configured charging and UPS losses.</li>
+<li>Generator sizing is based on worst-case surviving string demand including UPS input and fixed non-IT loads, converted by entered power factor.</li>
+<li>Transformer sizing is selected from the entered transformer rating list using the worst-case apparent power plus entered infrastructure loss allowance.</li>
+<li>Dual mode assumes 50/50 split with survivor taking 100% on failure.</li>
+<li>Triple mode assumes two active feeds at 50/50 and one catcher that absorbs the lost 50% share on active-feed failure.</li>
+<li>Quad mode assumes two independent paired paths (A/B and C/D), each redistributing only within its pair.</li>
+<li>Quint mode assumes four active feeds at 25% each plus one catcher that absorbs only the failed active 25% share.</li>
+</ul>
+</details>
 </div>
 <div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>UPS Output (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
@@ -330,7 +358,7 @@ function calculate(){
   var loss=parseFloat(document.getElementById('upsLoss').value)/100;
   var pf=parseFloat(document.getElementById('pf').value);
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
-  var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).sort(function(a,b){return a-b;});
+  var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
   var scenarios={};scenarios['Normal']=calcIT(null);
   for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
   var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.pumps+o.misc;}
@@ -371,6 +399,36 @@ function calculate(){
     +'<div class="sumc"><h3>Minimum Generator Size</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Based on worst-case generator apparent power</div></div>'
     +'<div class="sumc"><h3>Minimum Transformer Size</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Selected from entered transformer ratings</div></div>'
     +'<div class="sumc"><h3>Most Heavily Loaded String</h3><div class="sumv">'+criticalString+'</div><div class="sums">Peak failure-case UPS input: '+fmt(criticalUpsIn)+' kW</div></div>';
+
+  var warnings=[];
+  var normalVals=[];for(var nv=0;nv<strings.length;nv++)normalVals.push(normalIT[strings[nv]]||0);
+  var normalMin=Math.min.apply(null,normalVals),normalMax=Math.max.apply(null,normalVals);
+  var normalImb=normalMin>0?((normalMax-normalMin)/normalMin*100):0;
+  if(normalImb>10)warnings.push({level:'high',title:'High Normal Load Imbalance',text:'Normal IT load imbalance is '+fmtD(normalImb)+'%. Consider rebalancing row allocations.'});
+  else if(normalImb>5)warnings.push({level:'med',title:'Moderate Normal Load Imbalance',text:'Normal IT load imbalance is '+fmtD(normalImb)+'%. This may be acceptable if intentional, but review if not.'});
+
+  var normalCritical=normalIT[criticalString]||0;
+  var severity=normalCritical>0?((criticalUpsOut-normalCritical)/normalCritical*100):0;
+  if(severity>40)warnings.push({level:'high',title:'Severe Governing Failure Increase',text:'The governing failure case drives '+criticalString+' '+fmtD(severity)+'% above normal IT load.'});
+  else if(severity>20)warnings.push({level:'med',title:'Material Governing Failure Increase',text:'The governing failure case drives '+criticalString+' '+fmtD(severity)+'% above normal IT load.'});
+
+  if(pf<0.8||pf>1)warnings.push({level:'med',title:'Power Factor Outside Typical Range',text:'Entered power factor is '+pf+'. Review whether this is realistic for the design basis.'});
+  if(chg>0.08)warnings.push({level:'med',title:'High UPS Charging Allowance',text:'UPS charging allowance is '+fmtD(chg*100)+'%, which is higher than typical design assumptions.'});
+  if(loss>0.08)warnings.push({level:'med',title:'High UPS Loss Allowance',text:'UPS loss allowance is '+fmtD(loss*100)+'%, which may overstate sizing unless intentional.'});
+  if(infraL>0.05)warnings.push({level:'low',title:'High Infrastructure Loss Allowance',text:'Infrastructure loss allowance is '+fmtD(infraL*100)+'%. Confirm this matches the project basis.'});
+  if(txR.length===0)warnings.push({level:'high',title:'No Valid Transformer Ratings',text:'Transformer ratings list is empty or invalid, so sizing selection may be unreliable.'});
+
+  for(var wr=0;wr<allocData.length;wr++){
+    var rr=allocData[wr],feeds=[];
+    if(rr.a)feeds.push(rr.a);if(rr.b)feeds.push(rr.b);if(rr.c)feeds.push(rr.c);if(rr.d)feeds.push(rr.d);if(rr.e)feeds.push(rr.e);
+    var uniq={};var dup=false;for(var wu=0;wu<feeds.length;wu++){if(uniq[feeds[wu]]){dup=true;break;}uniq[feeds[wu]]=true;}
+    if(dup){warnings.push({level:'high',title:'Duplicate Feed Selection Detected',text:'Row '+(wr+1)+' contains duplicate string assignments. Review busbar selections.'});break;}
+  }
+
+  var wb=document.getElementById('warningBox');
+  if(warnings.length===0){wb.innerHTML='<div class="warn warn-low"><strong>No validation warnings</strong>Inputs and allocation passed the current validation checks.</div>';}
+  else{wb.innerHTML=warnings.map(function(w){return '<div class="warn warn-'+w.level+'"><strong>'+w.title+'</strong>'+w.text+'</div>';}).join('');}
+
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
