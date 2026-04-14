@@ -121,8 +121,8 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 
 <div class="cd">
 <h2>🔧 Other Loads Per String (Non-IT, fixed)</h2>
-<p class="nt">Mechanical/cooling loads per string. Do NOT redistribute on failure.</p>
-<div class="sx"><table class="et"><thead><tr><th>String</th><th>Mech Cooling (kW)</th><th>Pumps (kW)</th><th>Misc (kW)</th><th>Total</th></tr></thead><tbody id="otherBody"></tbody></table></div>
+<p class="nt">Mechanical and other fixed loads per string. Do NOT redistribute on failure.</p>
+<div class="sx"><table class="et"><thead><tr><th>String</th><th>Mech Equipment Loads (kW)</th><th>Mech UPS Loads (kW)</th><th>Misc (kW)</th><th>Total</th></tr></thead><tbody id="otherBody"></tbody></table></div>
 </div>
 
 <div class="br"><button class="btn bp" id="btnCalc">Calculate Failure Scenarios</button></div>
@@ -147,6 +147,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <li>Triple mode assumes two active feeds at 50/50 and one catcher that absorbs the lost 50% share on active-feed failure.</li>
 <li>Quad mode assumes two independent paired paths (A/B and C/D), each redistributing only within its pair.</li>
 <li>Quint mode assumes four active feeds at 25% each plus one catcher that absorbs only the failed active 25% share.</li>
+<li>Validation warnings are advisory checks only: load imbalance flags uneven normal IT distribution, governing failure uplift flags when the worst failure case materially exceeds normal loading, PF / loss warnings flag unusual design inputs, transformer list validation checks that a usable rating schedule exists, and duplicate feed warnings flag repeated string assignments within a single row.</li>
 </ul>
 </details>
 </div>
@@ -493,7 +494,7 @@ function exportCSV(){
   }
   addCsvSection(lines,'Row Allocation',rowRows);
 
-  var otherRows=[['String','Mech Cooling (kW)','Pumps (kW)','Misc (kW)','Total (kW)']];
+  var otherRows=[['String','Mech Equipment Loads (kW)','Mech UPS Loads (kW)','Misc (kW)','Total (kW)']];
   for(var j=0;j<strings.length;j++){
     var od=otherData[j]||{mech:0,pumps:0,misc:0};
     otherRows.push([strings[j],od.mech,od.pumps,od.misc,od.mech+od.pumps+od.misc]);
