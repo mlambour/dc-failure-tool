@@ -147,7 +147,15 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <li>Triple mode assumes two active feeds at 50/50 and one catcher that absorbs the lost 50% share on active-feed failure.</li>
 <li>Quad mode assumes two independent paired paths (A/B and C/D), each redistributing only within its pair.</li>
 <li>Quint mode assumes four active feeds at 25% each plus one catcher that absorbs only the failed active 25% share.</li>
-<li>Validation warnings are advisory checks only: load imbalance flags uneven normal IT distribution, governing failure uplift flags when the worst failure case materially exceeds normal loading, PF / loss warnings flag unusual design inputs, transformer list validation checks that a usable rating schedule exists, and duplicate feed warnings flag repeated string assignments within a single row.</li>
+<li>Validation warnings are advisory checks only and currently use these thresholds:</li>
+<li><strong>Normal IT load imbalance:</strong> moderate warning above 5%; high warning above 10%.</li>
+<li><strong>Governing failure uplift:</strong> material warning above 20% over normal IT load on the affected surviving string; severe warning above 40%.</li>
+<li><strong>Power factor:</strong> warning when entered PF is below 0.80 or above 1.00.</li>
+<li><strong>UPS charging allowance:</strong> warning when above 8%.</li>
+<li><strong>UPS loss allowance:</strong> warning when above 8%.</li>
+<li><strong>Infrastructure loss allowance:</strong> advisory warning when above 5%.</li>
+<li><strong>Transformer ratings:</strong> warning when no valid transformer ratings can be parsed from the input list.</li>
+<li><strong>Duplicate feed selections:</strong> warning when the same string is assigned more than once within a single row definition.</li>
 </ul>
 </details>
 </div>
