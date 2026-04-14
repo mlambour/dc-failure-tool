@@ -176,7 +176,7 @@ function genRows(){
   if(oldLoads.length===nRows){var oldT=0;for(var k=0;k<oldLoads.length;k++)oldT+=oldLoads[k];if(Math.abs(oldT-itKW)<0.5){rowLoads=oldLoads;}else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}}
   else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}
   var oldO=otherData.slice();otherData=[];
-  for(var i=0;i<nStrings;i++){if(oldO[i])otherData.push({mech:oldO[i].mech,pumps:oldO[i].pumps,misc:oldO[i].misc});else otherData.push({mech:0,pumps:0,misc:0});}
+  for(var i=0;i<nStrings;i++){if(oldO[i])otherData.push({mech:oldO[i].mech,pumps:oldO[i].pumps,misc:oldO[i].misc});else otherData.push({mech:450,pumps:22,misc:400});}
   renderRowLoads();renderOtherTable();
   document.getElementById('rowSection').classList.remove('hidden');
   document.getElementById('allocSection').classList.add('hidden');
