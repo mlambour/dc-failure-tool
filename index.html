@@ -122,7 +122,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <div class="cd">
 <h2>🔧 Other Loads Per String (Non-IT, fixed)</h2>
 <p class="nt">Mechanical and other fixed loads per string. Do NOT redistribute on failure.</p>
-<div class="sx"><table class="et"><thead><tr><th>String</th><th>Mech Equipment Loads (kW)</th><th>Mech UPS Loads (kW)</th><th>Misc (kW)</th><th>Total</th></tr></thead><tbody id="otherBody"></tbody></table></div>
+<div class="sx"><table class="et"><thead><tr><th>String</th><th>Chiller Electrical Load (kW)</th><th>Mech UPS Loads (kW)</th><th>Misc (kW)</th><th>Total</th></tr></thead><tbody id="otherBody"></tbody></table></div>
 </div>
 
 <div class="br"><button class="btn bp" id="btnCalc">Calculate Failure Scenarios</button></div>
@@ -494,7 +494,7 @@ function exportCSV(){
   }
   addCsvSection(lines,'Row Allocation',rowRows);
 
-  var otherRows=[['String','Mech Equipment Loads (kW)','Mech UPS Loads (kW)','Misc (kW)','Total (kW)']];
+  var otherRows=[['String','Chiller Electrical Load (kW)','Mech UPS Loads (kW)','Misc (kW)','Total (kW)']];
   for(var j=0;j<strings.length;j++){
     var od=otherData[j]||{mech:0,pumps:0,misc:0};
     otherRows.push([strings[j],od.mech,od.pumps,od.misc,od.mech+od.pumps+od.misc]);
