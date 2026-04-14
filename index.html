@@ -46,8 +46,13 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 .s2{background:rgba(0,200,83,0.15);color:var(--success)}
 .bal{margin-top:10px;padding:10px 14px;background:#0d1321;border-radius:8px;font-size:0.85rem}
 .bal strong{color:var(--accent)}
+.sumg{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.sumc{background:#0d1321;border:1px solid var(--border);border-radius:10px;padding:14px}
+.sumc h3{font-size:0.8rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px}
+.sumv{font-size:1.2rem;font-weight:700;color:var(--accent);margin-bottom:4px}
+.sums{font-size:0.82rem;color:var(--text2)}
 .hidden{display:none}
-@media print{body{background:#fff;color:#000;padding:10px}.cd{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}}
+@media print{body{background:#fff;color:#000;padding:10px}.cd{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}.sumc{background:#fff;border:1px solid #ccc}}
 @media(max-width:700px){body{padding:10px}.cd{padding:14px}.fr{flex-direction:column}h1{font-size:1.3rem}}
 </style>
 </head>
@@ -113,10 +118,17 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <div class="br"><button class="btn bp" id="btnCalc">Calculate Failure Scenarios</button></div>
 
 <div id="results">
+<div class="cd">
+<h2>🧾 Executive Summary</h2>
+<div class="sumg" id="execSummary"></div>
+</div>
 <div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>UPS Output (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
-<div class="br" style="margin-bottom:30px"><button class="btn bp" id="btnPrint">📄 Print / PDF</button></div>
+<div class="br" style="margin-bottom:30px">
+<button class="btn bs" id="btnExportCsv">📊 Export CSV</button>
+<button class="btn bp" id="btnPrint">📄 Print / PDF</button>
+</div>
 </div>
 </div>
 <script>
@@ -344,13 +356,21 @@ function calculate(){
   mb.innerHTML=mhtml;
 
   var sb=document.getElementById('sizingBody');var shtml='';
+  var criticalUps=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalString='';
   for(var i=0;i<strings.length;i++){var s=strings[i];var w=wPS[s];var oth=oLoad[s]||0;
     var uo=w.val,ui=uo*(1+chg+loss),gk=ui+oth,gv=gk/pf;
     var txL=gv*(1+infraL),txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     var ic=s===wO.str,cl=ic?'cr':'v';
+    if(ic){criticalUps=uo;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
     shtml+='<tr><td><strong>'+s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td>';
     shtml+='<td class="'+cl+'">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="'+cl+'">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td><td class="v">'+txRt+'</td><td>'+w.scen+'</td></tr>';}
   sb.innerHTML=shtml;
+  document.getElementById('execSummary').innerHTML=''
+    +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical surviving string: '+criticalString+'</div></div>'
+    +'<div class="sumc"><h3>Minimum UPS Size</h3><div class="sumv">'+fmt(criticalUps)+' kW</div><div class="sums">Worst-case UPS output requirement</div></div>'
+    +'<div class="sumc"><h3>Minimum Generator Size</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Based on worst-case generator apparent power</div></div>'
+    +'<div class="sumc"><h3>Minimum Transformer Size</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Selected from entered transformer ratings</div></div>'
+    +'<div class="sumc"><h3>Most Heavily Loaded String</h3><div class="sumv">'+criticalString+'</div><div class="sums">Peak failure-case UPS output: '+fmt(criticalUps)+' kW</div></div>';
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
@@ -367,6 +387,95 @@ function exportXML(){
   for(var i=0;i<otherData.length;i++){var o=otherData[i];x+='    <string id="'+strings[i]+'" mech="'+o.mech+'" pumps="'+o.pumps+'" misc="'+o.misc+'"/>\n';}
   x+='  </otherLoads>\n</DCFailureTool>';
   var blob=new Blob([x],{type:'application/xml'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario.xml';a.click();
+}
+function csvEsc(v){var s=v==null?'':String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function addCsvSection(lines,title,rows){
+  lines.push(csvEsc(title));
+  for(var i=0;i<rows.length;i++)lines.push(rows[i].map(csvEsc).join(','));
+  lines.push('');
+}
+function exportCSV(){
+  if(allocData.length===0){alert('Generate and allocate first.');return;}
+  var strings=gs();
+  var chg=parseFloat(document.getElementById('upsCharge').value)/100;
+  var loss=parseFloat(document.getElementById('upsLoss').value)/100;
+  var pf=parseFloat(document.getElementById('pf').value);
+  var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
+  var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
+  var scenarios={};scenarios['Normal']=calcIT(null);
+  for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
+  var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i]||{mech:0,pumps:0,misc:0};oLoad[strings[i]]=o.mech+o.pumps+o.misc;}
+  var lines=[];
+
+  addCsvSection(lines,'System Parameters',[
+    ['Parameter','Value'],
+    ['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],
+    ['Power Strings',document.getElementById('numStrings').value],
+    ['Rack Rows',document.getElementById('numRows').value],
+    ['Distribution Mode',mode],
+    ['UPS Charging %',document.getElementById('upsCharge').value],
+    ['UPS Losses %',document.getElementById('upsLoss').value],
+    ['Power Factor',document.getElementById('pf').value],
+    ['Infra Loss %',document.getElementById('infraLoss').value],
+    ['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
+  ]);
+
+  var rowHdr=['Row','Load (kW)'];
+  if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);
+  else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);
+  else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);
+  else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
+  var rowRows=[rowHdr];
+  for(var r=0;r<allocData.length;r++){
+    var ar=[r+1,allocData[r].load,allocData[r].a,allocData[r].b];
+    if(mode==='triple')ar.push(allocData[r].c);
+    if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);
+    if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);
+    rowRows.push(ar);
+  }
+  addCsvSection(lines,'Row Allocation',rowRows);
+
+  var otherRows=[['String','Mech Cooling (kW)','Pumps (kW)','Misc (kW)','Total (kW)']];
+  for(var j=0;j<strings.length;j++){
+    var od=otherData[j]||{mech:0,pumps:0,misc:0};
+    otherRows.push([strings[j],od.mech,od.pumps,od.misc,od.mech+od.pumps+od.misc]);
+  }
+  addCsvSection(lines,'Other Loads',otherRows);
+
+  var normalRows=[['String','IT Load (kW)','Other Load (kW)','UPS Output (kW)','UPS Input (kW)','Gen Load (kW)','Gen (kVA)']];
+  var normalIT=scenarios['Normal'];
+  for(var n=0;n<strings.length;n++){
+    var s=strings[n],it=normalIT[s]||0,oth=oLoad[s]||0,uo=it,ui=uo*(1+chg+loss),gk=ui+oth,gv=gk/pf;
+    normalRows.push([s,it.toFixed(1),oth.toFixed(1),uo.toFixed(1),ui.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
+  }
+  addCsvSection(lines,'Normal Operation Summary',normalRows);
+
+  var matrixRows=[['String','Normal'].concat(strings.map(function(s){return s+' Fails';})).concat(['Worst Case','Worst Scenario'])];
+  var worstPerString={};
+  for(var m=0;m<strings.length;m++){
+    var ss=strings[m],best=0,bestS='Normal',row=[ss];
+    var keys=['Normal'];for(var kk=0;kk<strings.length;kk++)keys.push(strings[kk]+' Fails');
+    for(var q=0;q<keys.length;q++){
+      var key=keys[q],sc=scenarios[key];
+      if(key===ss+' Fails'){row.push('—');continue;}
+      var val=sc[ss]||0;if(val>best){best=val;bestS=key;}row.push(val.toFixed(1));
+    }
+    worstPerString[ss]={val:best,scen:bestS};
+    row.push(best.toFixed(1),bestS);
+    matrixRows.push(row);
+  }
+  addCsvSection(lines,'Failure Scenario Matrix',matrixRows);
+
+  var sizingRows=[['String','Worst UPS Out (kW)','UPS Input (kW)','Gen (kW)','Gen (kVA)','Transformer (kVA)','Scenario']];
+  for(var z=0;z<strings.length;z++){
+    var st=strings[z],w=worstPerString[st],othl=oLoad[st]||0,wuo=w.val,wui=wuo*(1+chg+loss),wgk=wui+othl,wgv=wgk/pf,txL=wgv*(1+infraL),txRt=txR.length?txR[txR.length-1]:'';
+    for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
+    sizingRows.push([st,wuo.toFixed(1),wui.toFixed(1),wgk.toFixed(1),wgv.toFixed(1),txRt,w.scen]);
+  }
+  addCsvSection(lines,'Equipment Sizing',sizingRows);
+
+  var blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario-report.csv';a.click();
 }
 function importXML(file){
   var reader=new FileReader();reader.onload=function(e){try{
@@ -394,6 +503,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnRetain').addEventListener('click',retainAlloc);
   document.getElementById('btnCalc').addEventListener('click',calculate);
   document.getElementById('btnPrint').addEventListener('click',function(){window.print();});
+  document.getElementById('btnExportCsv').addEventListener('click',exportCSV);
   document.getElementById('distMode').addEventListener('change',function(){document.getElementById('modeDesc').textContent=MODES[this.value];});
   document.getElementById('btnExport').addEventListener('click',exportXML);
   document.getElementById('btnImport').addEventListener('click',function(){document.getElementById('fileInput').click();});
