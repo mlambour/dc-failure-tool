@@ -141,7 +141,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <li>UPS sizing is based on <strong>IT load only</strong>; mechanical, pumps, and miscellaneous loads are fixed non-IT loads per string.</li>
 <li>Mechanical / cooling / pump / miscellaneous loads <strong>do not redistribute</strong> during failure scenarios.</li>
 <li>UPS input power is calculated from UPS output plus configured charging and UPS losses.</li>
-<li>Generator sizing is based on worst-case surviving string demand including UPS input, distribution losses, and fixed non-IT loads, converted by entered power factor.</li>
+<li>Generator sizing is based on worst-case surviving string demand with distribution losses first applied to UPS output, then UPS charging and losses applied to that adjusted UPS demand, then fixed non-IT loads added, then a further distribution loss allowance applied to the combined total before conversion by entered power factor.</li>
 <li>Transformer sizing is selected from the entered transformer rating list using the calculated generator apparent power.</li>
 <li>Dual mode assumes 50/50 split with survivor taking 100% on failure.</li>
 <li>Triple mode assumes two active feeds at 50/50 and one catcher that absorbs the lost 50% share on active-feed failure.</li>
@@ -374,7 +374,7 @@ function calculate(){
 
   var nb=document.getElementById('normalBody');var nhtml='';var normalIT=scenarios['Normal'];
   for(var i=0;i<strings.length;i++){var s=strings[i];var it=normalIT[s]||0;var oth=oLoad[s]||0;
-    var uo=it,ui=uo*(1+chg+loss),dist=ui*infraL,gk=ui+dist+oth,gv=gk/pf;
+    var uo=it,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),genBase=ui+oth,gk=genBase*(1+infraL),gv=gk/pf;
     nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
   nb.innerHTML=nhtml;
 
@@ -395,7 +395,7 @@ function calculate(){
   var sb=document.getElementById('sizingBody');var shtml='';
   var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalString='';
   for(var i=0;i<strings.length;i++){var s=strings[i];var w=wPS[s];var oth=oLoad[s]||0;
-    var uo=w.val,ui=uo*(1+chg+loss),dist=ui*infraL,gk=ui+dist+oth,gv=gk/pf;
+    var uo=w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),genBase=ui+oth,gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     var ic=s===wO.str,cl=ic?'cr':'v';
     if(ic){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
@@ -512,7 +512,7 @@ function exportCSV(){
   var normalRows=[['String','IT Load (kW)','Other Load (kW)','UPS Output (kW)','UPS Input (kW)','Gen Load (kW)','Gen (kVA)']];
   var normalIT=scenarios['Normal'];
   for(var n=0;n<strings.length;n++){
-    var s=strings[n],it=normalIT[s]||0,oth=oLoad[s]||0,uo=it,ui=uo*(1+chg+loss),dist=ui*infraL,gk=ui+dist+oth,gv=gk/pf;
+    var s=strings[n],it=normalIT[s]||0,oth=oLoad[s]||0,uo=it,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),genBase=ui+oth,gk=genBase*(1+infraL),gv=gk/pf;
     normalRows.push([s,it.toFixed(1),oth.toFixed(1),uo.toFixed(1),ui.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
   }
   addCsvSection(lines,'Normal Operation Summary',normalRows);
