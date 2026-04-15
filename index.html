@@ -482,7 +482,7 @@ function calculate(){
 
   var sb=document.getElementById('sizingBody');var shtml='';
   var mechSb=document.getElementById('mechSizingBody');var mechShtml='';
-  var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalString='';
+  var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalUpsString='',criticalGenString='';
   var criticalMechUpsOut=0,criticalMechUpsIn=0,criticalMechScenario='',criticalMechString='';
   var sizingRows=[];
   for(var i=0;i<strings.length;i++){
@@ -490,13 +490,18 @@ function calculate(){
     var mechUpsTotal=fanWallLoad+od.pumps;
     var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
-    if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
+    if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalScenario=w.scen;criticalUpsString=s;}
+    if(gv>criticalGen){criticalGen=gv;criticalTx=txRt;criticalGenString=s;}
     if(mechUpsIn>criticalMechUpsIn){criticalMechUpsOut=mechUpsOut;criticalMechUpsIn=mechUpsIn;criticalMechScenario=w.scen;criticalMechString=s;}
     sizingRows.push({s:s,uo:uo,ui:ui,gk:gk,gv:gv,txRt:txRt,scen:w.scen,mechUpsOut:mechUpsOut,mechUpsIn:mechUpsIn});
   }
   for(var sr=0;sr<sizingRows.length;sr++){
-    var row=sizingRows[sr],ic=row.s===criticalString,cl=ic?'cr':'v';
-    shtml+='<tr><td><strong>'+row.s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+cl+'">'+fmt(row.uo)+'</td><td>' +fmt(row.ui)+ '</td><td class="'+cl+'">'+fmt(row.gk)+'</td><td>'+fmt(row.gv)+'</td><td class="v">'+row.txRt+'</td><td>'+row.scen+'</td></tr>';
+    var row=sizingRows[sr],isUps=row.s===criticalUpsString,isGen=row.s===criticalGenString;
+    var upsClass=isUps?'cr':'v',genClass=isGen?'cr':'v';
+    var tags='';
+    if(isUps)tags+=' <span class="tg tc">CRITICAL (UPS)</span>';
+    if(isGen)tags+=' <span class="tg tc">CRITICAL (GEN)</span>';
+    shtml+='<tr><td><strong>'+row.s+'</strong>'+tags+'</td><td class="'+upsClass+'">'+fmt(row.uo)+'</td><td class="'+upsClass+'">'+fmt(row.ui)+'</td><td class="'+genClass+'">'+fmt(row.gk)+'</td><td class="'+genClass+'">'+fmt(row.gv)+'</td><td class="'+genClass+'">'+row.txRt+'</td><td>'+row.scen+'</td></tr>';
     if(upsMode==='separate'){
       var mic=row.s===criticalMechString,mcl=mic?'cr':'v';
       mechShtml+='<tr><td><strong>'+row.s+'</strong>'+(mic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+mcl+'">'+fmt(row.mechUpsOut)+'</td><td class="'+mcl+'">'+fmt(row.mechUpsIn)+'</td><td>'+row.scen+'</td></tr>';
@@ -506,12 +511,12 @@ function calculate(){
   mechSb.innerHTML=mechShtml;
   document.getElementById('mechSizingCard').style.display=upsMode==='separate'?'block':'none';
   document.getElementById('execSummary').innerHTML=''
-    +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical surviving string: '+criticalString+'</div></div>'
-    +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">Worst-case UPS input load</div></div>'
+    +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical UPS string: '+criticalUpsString+'</div></div>'
+    +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">Worst-case UPS input load on '+criticalUpsString+'</div></div>'
     +(upsMode==='separate'?'<div class="sumc"><h3>Max Mech UPS Load</h3><div class="sumv">'+fmt(criticalMechUpsIn)+' kW</div><div class="sums">Worst-case mech UPS input on '+criticalMechString+' ('+criticalMechScenario+')</div></div>':'')
-    +'<div class="sumc"><h3>Max Generator Load</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Worst-case generator apparent load</div></div>'
-    +'<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Selected transformer basis from available ratings</div></div>'
-    +'<div class="sumc"><h3>Most Heavily Loaded String</h3><div class="sumv">'+criticalString+'</div><div class="sums">Peak failure-case UPS input: '+fmt(criticalUpsIn)+' kW</div></div>';
+    +'<div class="sumc"><h3>Max Generator Load</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Worst-case generator apparent load on '+criticalGenString+'</div></div>'
+    +'<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Transformer basis governed by '+criticalGenString+'</div></div>'
+    +'<div class="sumc"><h3>Critical Strings</h3><div class="sumv">'+(criticalUpsString===criticalGenString?criticalUpsString:(criticalUpsString+' / '+criticalGenString))+'</div><div class="sums">UPS critical / Generator critical</div></div>';
 
   var warnings=[];
   var normalVals=[];for(var nv=0;nv<strings.length;nv++)normalVals.push(normalIT[strings[nv]]||0);
@@ -520,10 +525,10 @@ function calculate(){
   if(normalImb>10)warnings.push({level:'high',title:'High Normal Load Imbalance',text:'Normal IT load imbalance is '+fmtD(normalImb)+'%. Consider rebalancing row allocations.'});
   else if(normalImb>5)warnings.push({level:'med',title:'Moderate Normal Load Imbalance',text:'Normal IT load imbalance is '+fmtD(normalImb)+'%. This may be acceptable if intentional, but review if not.'});
 
-  var normalCritical=normalIT[criticalString]||0;
+  var normalCritical=normalIT[criticalUpsString]||0;
   var severity=normalCritical>0?((criticalUpsOut-normalCritical)/normalCritical*100):0;
-  if(severity>40)warnings.push({level:'high',title:'Severe Governing Failure Increase',text:'The governing failure case drives '+criticalString+' '+fmtD(severity)+'% above normal IT load.'});
-  else if(severity>20)warnings.push({level:'med',title:'Material Governing Failure Increase',text:'The governing failure case drives '+criticalString+' '+fmtD(severity)+'% above normal IT load.'});
+  if(severity>40)warnings.push({level:'high',title:'Severe Governing Failure Increase',text:'The governing failure case drives '+criticalUpsString+' '+fmtD(severity)+'% above normal IT load.'});
+  else if(severity>20)warnings.push({level:'med',title:'Material Governing Failure Increase',text:'The governing failure case drives '+criticalUpsString+' '+fmtD(severity)+'% above normal IT load.'});
 
   if(pf<0.8||pf>1)warnings.push({level:'med',title:'Power Factor Outside Typical Range',text:'Entered power factor is '+pf+'. Review whether this is realistic for the design basis.'});
   if(chg>0.08)warnings.push({level:'med',title:'High UPS Charging Allowance',text:'UPS charging allowance is '+fmtD(chg*100)+'%, which is higher than typical design assumptions.'});
