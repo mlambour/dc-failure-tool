@@ -141,6 +141,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <h2>🌀 Fan Wall Units</h2>
 <p class="nt">Fan wall units are structured mech UPS loads. In normal operation, the full unit load sits on the primary string. On primary string failure, the full load transfers to the secondary string.</p>
 <div class="sx"><table class="et"><thead><tr><th>Unit</th><th>Load (kW)</th><th>Primary String</th><th>Secondary String</th></tr></thead><tbody id="fanWallBody"></tbody></table></div>
+<div id="fanWallSummary" class="bal"></div>
 </div>
 
 <div class="cd">
@@ -373,7 +374,18 @@ function renderFanWallTable(){
   tb.querySelectorAll('input,select').forEach(function(el){el.addEventListener('change',function(e){
     var fi=parseInt(e.target.getAttribute('data-fi')),fld=e.target.getAttribute('data-f');
     fanWallData[fi][fld]=fld==='load'?(parseFloat(e.target.value)||0):e.target.value;
+    renderFanWallSummary();
   });});
+  renderFanWallSummary();
+}
+function renderFanWallSummary(){
+  var strings=gs(),loads={};for(var i=0;i<strings.length;i++)loads[strings[i]]=0;
+  var total=0;
+  for(var j=0;j<fanWallData.length;j++){var fw=fanWallData[j];if(loads[fw.primary]!==undefined)loads[fw.primary]+=fw.load;total+=fw.load;}
+  var html='<strong>Normal Fan Wall Load per String:</strong> ';
+  for(var k=0;k<strings.length;k++)html+=strings[k]+': '+fmt(loads[strings[k]])+' kW &nbsp; ';
+  html+='<br><strong>Total Fan Wall Load:</strong> '+fmt(total)+' kW';
+  document.getElementById('fanWallSummary').innerHTML=html;
 }
 function renderMechUpsTable(){
   var strings=gs();var tb=document.getElementById('mechUpsBody');var html='';
