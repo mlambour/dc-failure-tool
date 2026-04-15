@@ -188,6 +188,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead id="normalHead"><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
+<div class="cd" id="mechSizingCard" style="display:none"><h2>🔋 Mech UPS Failure Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst Mech UPS Output (kW)</th><th>Worst Mech UPS Input (kW)</th><th>Scenario</th></tr></thead><tbody id="mechSizingBody"></tbody></table></div></div>
 <div class="br" style="margin-bottom:30px">
 <button class="btn bs" id="btnExportCsv">📊 Export CSV</button>
 <button class="btn bp" id="btnPrint">📄 Print / PDF</button>
@@ -480,7 +481,9 @@ function calculate(){
   mb.innerHTML=mhtml;
 
   var sb=document.getElementById('sizingBody');var shtml='';
+  var mechSb=document.getElementById('mechSizingBody');var mechShtml='';
   var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalString='';
+  var criticalMechUpsOut=0,criticalMechUpsIn=0,criticalMechScenario='',criticalMechString='';
   var sizingRows=[];
   for(var i=0;i<strings.length;i++){
     var s=strings[i],w=wPS[s],od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
@@ -488,16 +491,24 @@ function calculate(){
     var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
-    sizingRows.push({s:s,uo:uo,ui:ui,gk:gk,gv:gv,txRt:txRt,scen:w.scen});
+    if(mechUpsIn>criticalMechUpsIn){criticalMechUpsOut=mechUpsOut;criticalMechUpsIn=mechUpsIn;criticalMechScenario=w.scen;criticalMechString=s;}
+    sizingRows.push({s:s,uo:uo,ui:ui,gk:gk,gv:gv,txRt:txRt,scen:w.scen,mechUpsOut:mechUpsOut,mechUpsIn:mechUpsIn});
   }
   for(var sr=0;sr<sizingRows.length;sr++){
     var row=sizingRows[sr],ic=row.s===criticalString,cl=ic?'cr':'v';
     shtml+='<tr><td><strong>'+row.s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+cl+'">'+fmt(row.uo)+'</td><td>' +fmt(row.ui)+ '</td><td class="'+cl+'">'+fmt(row.gk)+'</td><td>'+fmt(row.gv)+'</td><td class="v">'+row.txRt+'</td><td>'+row.scen+'</td></tr>';
+    if(upsMode==='separate'){
+      var mic=row.s===criticalMechString,mcl=mic?'cr':'v';
+      mechShtml+='<tr><td><strong>'+row.s+'</strong>'+(mic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+mcl+'">'+fmt(row.mechUpsOut)+'</td><td class="'+mcl+'">'+fmt(row.mechUpsIn)+'</td><td>'+row.scen+'</td></tr>';
+    }
   }
   sb.innerHTML=shtml;
+  mechSb.innerHTML=mechShtml;
+  document.getElementById('mechSizingCard').style.display=upsMode==='separate'?'block':'none';
   document.getElementById('execSummary').innerHTML=''
     +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical surviving string: '+criticalString+'</div></div>'
     +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">Worst-case UPS input load</div></div>'
+    +(upsMode==='separate'?'<div class="sumc"><h3>Max Mech UPS Load</h3><div class="sumv">'+fmt(criticalMechUpsIn)+' kW</div><div class="sums">Worst-case mech UPS input on '+criticalMechString+' ('+criticalMechScenario+')</div></div>':'')
     +'<div class="sumc"><h3>Max Generator Load</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Worst-case generator apparent load</div></div>'
     +'<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Selected transformer basis from available ratings</div></div>'
     +'<div class="sumc"><h3>Most Heavily Loaded String</h3><div class="sumv">'+criticalString+'</div><div class="sums">Peak failure-case UPS input: '+fmt(criticalUpsIn)+' kW</div></div>';
