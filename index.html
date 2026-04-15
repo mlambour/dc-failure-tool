@@ -90,6 +90,9 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <div class="fg"><label>Power Factor</label><input type="number" id="pf" value="0.9" step="0.05" min="0.5" max="1"></div>
 <div class="fg"><label>Distribution Loss %</label><input type="number" id="infraLoss" value="1" step="0.05"></div>
 </div>
+<div class="fr">
+<div class="fg"><label>UPS Configuration</label><select id="upsMode"><option value="separate">Separate IT UPS + Mech UPS</option><option value="combined">Combined IT + Mech Equipment UPS</option></select></div>
+</div>
 <div class="fr"><div class="fg" style="min-width:300px"><label>Transformer Ratings (kVA)</label><input type="text" id="txRatings" value="800,1000,1250,1500,2000,2500,3150"></div></div>
 <div class="br">
 <button class="btn bs bsm" id="btnExport">💾 Save XML</button>
@@ -144,10 +147,10 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <details class="det">
 <summary>Show calculation assumptions</summary>
 <ul>
-<li>UPS sizing is based on <strong>IT load only</strong>; mechanical, pumps, and miscellaneous loads are fixed non-IT loads per string.</li>
+<li>UPS sizing can be configured as either <strong>IT-only UPS</strong> with separate mechanical UPS reporting, or <strong>combined IT + mech equipment UPS</strong> where chiller electrical load is included in the main UPS sizing basis.</li>
 <li>Mechanical / cooling / pump / miscellaneous loads <strong>do not redistribute</strong> during failure scenarios.</li>
 <li>UPS input power is calculated from UPS output plus configured charging and UPS losses.</li>
-<li>Generator sizing is based on worst-case surviving string demand with distribution losses first applied to UPS output, then UPS charging and losses applied to that adjusted UPS demand, then fixed non-IT loads added, then a further distribution loss allowance applied to the combined total before conversion by entered power factor.</li>
+<li>Generator sizing is based on worst-case surviving string demand with distribution losses first applied to UPS output, then UPS charging and losses applied to that adjusted UPS demand, then fixed non-IT loads added, then a further distribution loss allowance applied to the combined total before conversion by entered power factor.</li><li>In separate UPS mode, the tool also reports mechanical UPS output and input from the entered Mech UPS Loads for visibility, while generator sizing still uses the combined load basis.</li>
 <li>Transformer sizing is selected from the entered transformer rating list using the calculated generator apparent power.</li>
 <li>Dual mode assumes 50/50 split with survivor taking 100% on failure.</li>
 <li>Triple mode assumes two active feeds at 50/50 and one catcher that absorbs the lost 50% share on active-feed failure.</li>
@@ -165,7 +168,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 </ul>
 </details>
 </div>
-<div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>UPS Output (kW)</th><th>UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
+<div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
 <div class="br" style="margin-bottom:30px">
@@ -379,9 +382,14 @@ function calculate(){
   var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.pumps+o.misc;}
 
   var nb=document.getElementById('normalBody');var nhtml='';var normalIT=scenarios['Normal'];
-  for(var i=0;i<strings.length;i++){var s=strings[i];var it=normalIT[s]||0;var oth=oLoad[s]||0;
-    var uo=it,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),genBase=ui+oth,gk=genBase*(1+infraL),gv=gk/pf;
-    nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
+  var upsMode=document.getElementById('upsMode').value;
+  for(var i=0;i<strings.length;i++){var s=strings[i];var it=normalIT[s]||0;var od=otherData[i]||{mech:0,pumps:0,misc:0};var oth=oLoad[s]||0;
+    var mainUpsOut=upsMode==='combined'?(it+od.mech):it;
+    var upsBase=mainUpsOut*(1+infraL),ui=upsBase*(1+chg+loss);
+    var mechUpsOut=upsMode==='separate'?od.pumps:0;
+    var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
+    var genBase=ui+mechUpsIn+(upsMode==='combined'?oth-od.mech-od.pumps:oth-od.pumps),gk=genBase*(1+infraL),gv=gk/pf;
+    nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
   nb.innerHTML=nhtml;
 
   var mh=document.getElementById('matrixHead');var mb=document.getElementById('matrixBody');
@@ -401,7 +409,9 @@ function calculate(){
   var sb=document.getElementById('sizingBody');var shtml='';
   var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalString='';
   for(var i=0;i<strings.length;i++){var s=strings[i];var w=wPS[s];var oth=oLoad[s]||0;
-    var uo=w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),genBase=ui+oth,gk=genBase*(1+infraL),gv=gk/pf;
+    var od=otherData[i]||{mech:0,pumps:0,misc:0};
+    var upsMode=document.getElementById('upsMode').value;
+    var uo=upsMode==='combined'?(w.val+od.mech):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?od.pumps:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+(upsMode==='combined'?oth-od.mech-od.pumps:oth-od.pumps),gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     var ic=s===wO.str,cl=ic?'cr':'v';
     if(ic){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
@@ -515,11 +525,17 @@ function exportCSV(){
   }
   addCsvSection(lines,'Other Loads',otherRows);
 
-  var normalRows=[['String','IT Load (kW)','Other Load (kW)','UPS Output (kW)','UPS Input (kW)','Gen Load (kW)','Gen (kVA)']];
+  var normalRows=[['String','IT Load (kW)','Other Load (kW)','IT UPS Output (kW)','IT UPS Input (kW)','Mech UPS Output (kW)','Mech UPS Input (kW)','Gen Load (kW)','Gen (kVA)']];
   var normalIT=scenarios['Normal'];
+  var upsMode=document.getElementById('upsMode').value;
   for(var n=0;n<strings.length;n++){
-    var s=strings[n],it=normalIT[s]||0,oth=oLoad[s]||0,uo=it,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),genBase=ui+oth,gk=genBase*(1+infraL),gv=gk/pf;
-    normalRows.push([s,it.toFixed(1),oth.toFixed(1),uo.toFixed(1),ui.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
+    var s=strings[n],it=normalIT[s]||0,od=otherData[n]||{mech:0,pumps:0,misc:0},oth=oLoad[s]||0;
+    var mainUpsOut=upsMode==='combined'?(it+od.mech):it;
+    var upsBase=mainUpsOut*(1+infraL),mainUpsIn=upsBase*(1+chg+loss);
+    var mechUpsOut=upsMode==='separate'?od.pumps:0;
+    var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
+    var genBase=mainUpsIn+mechUpsIn+(upsMode==='combined'?oth-od.mech-od.pumps:oth-od.pumps),gk=genBase*(1+infraL),gv=gk/pf;
+    normalRows.push([s,it.toFixed(1),oth.toFixed(1),mainUpsOut.toFixed(1),mainUpsIn.toFixed(1),mechUpsOut.toFixed(1),mechUpsIn.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
   }
   addCsvSection(lines,'Normal Operation Summary',normalRows);
 
