@@ -643,15 +643,25 @@ function importXML(file){
     if(p){var gv=function(t){var el=p.querySelector(t);return el?el.textContent:'';};
       var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','pf','infraLoss','txRatings','upsMode'];
       for(var i=0;i<ids.length;i++){var v=gv(ids[i]);if(v)document.getElementById(ids[i]).value=v;}
+      if(!gv('numFanWalls'))document.getElementById('numFanWalls').value='0';
+      if(!gv('upsMode'))document.getElementById('upsMode').value='separate';
       mode=gv('distMode')||'dual';document.getElementById('distMode').value=mode;document.getElementById('modeDesc').textContent=MODES[mode];}
     nStrings=parseInt(document.getElementById('numStrings').value);nRows=parseInt(document.getElementById('numRows').value);
     var rows=doc.querySelectorAll('rows row');rowLoads=[];allocData=[];
     for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''});}
-    var fwRows=doc.querySelectorAll('fanWalls fanWall');fanWallData=[];for(var f=0;f<fwRows.length;f++){var fw=fwRows[f];fanWallData.push({load:parseFloat(fw.getAttribute('load'))||6.03,primary:fw.getAttribute('primary')||'A',secondary:fw.getAttribute('secondary')||'B'});}    
+    var fwRows=doc.querySelectorAll('fanWalls fanWall');fanWallData=[];
+    for(var f=0;f<fwRows.length;f++){var fw=fwRows[f];fanWallData.push({load:parseFloat(fw.getAttribute('load'))||6.03,primary:fw.getAttribute('primary')||'A',secondary:fw.getAttribute('secondary')||'B'});}    
+    if(fwRows.length===0){
+      var nFan=parseInt(document.getElementById('numFanWalls').value)||0;
+      fanWallData=buildBalancedFanWalls(nFan,gs());
+    }
     var oL=doc.querySelectorAll('otherLoads string');otherData=[];
     for(var i=0;i<oL.length;i++){var ol=oL[i];otherData.push({mech:parseFloat(ol.getAttribute('mech'))||0,pumps:parseFloat(ol.getAttribute('pumps'))||0,misc:parseFloat(ol.getAttribute('misc'))||0});}
+    while(otherData.length<nStrings)otherData.push({mech:450,pumps:22,misc:400});
+    while(fanWallData.length<(parseInt(document.getElementById('numFanWalls').value)||0))fanWallData.push({load:6.03,primary:gs()[0]||'A',secondary:gs()[1]||gs()[0]||'A'});
     renderRowLoads();renderAllocTable(null);recalcBalance();renderOtherTable();renderFanWallTable();renderMechUpsTable();
     document.getElementById('rowSection').classList.remove('hidden');document.getElementById('allocSection').classList.remove('hidden');document.getElementById('results').style.display='none';
+    setTimeout(function(){try{calculate();}catch(_e){}},0);
   }catch(err){alert('Error: '+err.message);}};reader.readAsText(file);
 }
 
