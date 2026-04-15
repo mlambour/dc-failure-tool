@@ -486,8 +486,8 @@ function calculate(){
     var mechUpsTotal=fanWallLoad+od.pumps;
     var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
-    var ic=s===wO.str,cl=ic?'cr':'v';
-    if(ic){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
+    if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
+    var ic=s===criticalString,cl=ic?'cr':'v';
     shtml+='<tr><td><strong>'+s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+cl+'">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="'+cl+'">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td><td class="v">'+txRt+'</td><td>'+w.scen+'</td></tr>';
   }
   sb.innerHTML=shtml;
