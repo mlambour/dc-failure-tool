@@ -483,8 +483,8 @@ function calculate(){
     mhtml+='<td><span class="tg '+tc+'">'+fmt(best)+'kW</span> '+bestS+'</td></tr>';
   }
   mb.innerHTML=mhtml;
+  var mechWorst={};
   if(upsMode==='separate'){
-    var mechWorst={};
     for(var mi=0;mi<strings.length;mi++){
       var ms=strings[mi],mbest=0,mbestS='Normal';
       mechMhtml+='<tr><td><strong>'+ms+'</strong></td>';
@@ -521,8 +521,11 @@ function calculate(){
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalScenario=w.scen;criticalUpsString=s;}
     if(gv>criticalGen){criticalGen=gv;criticalTx=txRt;criticalGenString=s;}
-    if(mechUpsIn>criticalMechUpsIn){criticalMechUpsOut=mechUpsOut;criticalMechUpsIn=mechUpsIn;criticalMechScenario=w.scen;criticalMechString=s;}
-    sizingRows.push({s:s,uo:uo,ui:ui,gk:gk,gv:gv,txRt:txRt,scen:w.scen,mechUpsOut:mechUpsOut,mechUpsIn:mechUpsIn});
+    var mw=mechWorst[s]||{val:0,scen:'Normal'};
+    var mechWorstOut=mw.val;
+    var mechWorstIn=mechWorstOut>0?mechWorstOut*(1+infraL)*(1+chg+loss):0;
+    if(mechWorstIn>criticalMechUpsIn){criticalMechUpsOut=mechWorstOut;criticalMechUpsIn=mechWorstIn;criticalMechScenario=mw.scen;criticalMechString=s;}
+    sizingRows.push({s:s,uo:uo,ui:ui,gk:gk,gv:gv,txRt:txRt,scen:w.scen,mechUpsOut:mechWorstOut,mechUpsIn:mechWorstIn,mechScen:mw.scen});
   }
   for(var sr=0;sr<sizingRows.length;sr++){
     var row=sizingRows[sr],isUps=row.s===criticalUpsString,isGen=row.s===criticalGenString;
@@ -533,7 +536,7 @@ function calculate(){
     shtml+='<tr><td><strong>'+row.s+'</strong>'+tags+'</td><td class="'+upsClass+'">'+fmt(row.uo)+'</td><td class="'+upsClass+'">'+fmt(row.ui)+'</td><td class="'+genClass+'">'+fmt(row.gk)+'</td><td class="'+genClass+'">'+fmt(row.gv)+'</td><td class="'+genClass+'">'+row.txRt+'</td><td>'+row.scen+'</td></tr>';
     if(upsMode==='separate'){
       var mic=row.s===criticalMechString,mcl=mic?'cr':'v';
-      mechShtml+='<tr><td><strong>'+row.s+'</strong>'+(mic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+mcl+'">'+fmt(row.mechUpsOut)+'</td><td class="'+mcl+'">'+fmt(row.mechUpsIn)+'</td><td>'+row.scen+'</td></tr>';
+      mechShtml+='<tr><td><strong>'+row.s+'</strong>'+(mic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+mcl+'">'+fmt(row.mechUpsOut)+'</td><td class="'+mcl+'">'+fmt(row.mechUpsIn)+'</td><td>'+row.mechScen+'</td></tr>';
     }
   }
   sb.innerHTML=shtml;
