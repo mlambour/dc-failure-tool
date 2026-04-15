@@ -481,14 +481,18 @@ function calculate(){
 
   var sb=document.getElementById('sizingBody');var shtml='';
   var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalString='';
+  var sizingRows=[];
   for(var i=0;i<strings.length;i++){
     var s=strings[i],w=wPS[s],od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
     var mechUpsTotal=fanWallLoad+od.pumps;
     var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
-    var ic=s===criticalString,cl=ic?'cr':'v';
-    shtml+='<tr><td><strong>'+s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+cl+'">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="'+cl+'">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td><td class="v">'+txRt+'</td><td>'+w.scen+'</td></tr>';
+    sizingRows.push({s:s,uo:uo,ui:ui,gk:gk,gv:gv,txRt:txRt,scen:w.scen});
+  }
+  for(var sr=0;sr<sizingRows.length;sr++){
+    var row=sizingRows[sr],ic=row.s===criticalString,cl=ic?'cr':'v';
+    shtml+='<tr><td><strong>'+row.s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+cl+'">'+fmt(row.uo)+'</td><td>' +fmt(row.ui)+ '</td><td class="'+cl+'">'+fmt(row.gk)+'</td><td>'+fmt(row.gv)+'</td><td class="v">'+row.txRt+'</td><td>'+row.scen+'</td></tr>';
   }
   sb.innerHTML=shtml;
   document.getElementById('execSummary').innerHTML=''
