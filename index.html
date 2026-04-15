@@ -31,7 +31,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .br{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
 table{width:100%;border-collapse:collapse;margin-top:8px;font-size:0.88rem}
 th{text-align:left;padding:7px 8px;background:#0d1321;color:var(--accent);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap}
-td{padding:7px 8px;border-top:1px solid var(--border)}
+td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 .v{font-weight:600;color:var(--accent)}
 .cr{color:var(--crit);font-weight:700}
 .tg{display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.72rem;font-weight:700}
@@ -39,9 +39,9 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 .tw{background:rgba(255,167,38,0.15);color:var(--warn)}
 .to{background:rgba(0,200,83,0.15);color:var(--success)}
 #results{display:none}
-.et input{width:65px;padding:4px 5px;font-size:0.84rem;text-align:right}
-.et select{width:48px;padding:3px;font-size:0.84rem}
-.et td{padding:3px 5px}
+.et input{width:80px;padding:4px 5px;font-size:0.84rem;text-align:left}
+.et select{width:56px;padding:3px;font-size:0.84rem}
+.et td{padding:3px 5px;text-align:left}
 .sx{overflow-x:auto}
 .nt{font-size:0.8rem;color:var(--text2);margin-top:6px;font-style:italic}
 .md{font-size:0.82rem;color:var(--text2);margin-top:4px;padding:8px 12px;background:#0d1321;border-radius:6px;border-left:3px solid var(--accent)}
@@ -174,7 +174,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 </ul>
 </details>
 </div>
-<div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
+<div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead id="normalHead"><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
 <div class="br" style="margin-bottom:30px">
@@ -395,15 +395,19 @@ function calculate(){
   for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
   var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.pumps+o.misc;}
 
-  var nb=document.getElementById('normalBody');var nhtml='';var normalIT=scenarios['Normal'];
+  var nb=document.getElementById('normalBody');var nh=document.getElementById('normalHead');var nhtml='';var normalIT=scenarios['Normal'];
   var upsMode=document.getElementById('upsMode').value;
+  nh.innerHTML=upsMode==='combined'
+    ?'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT + Mech UPS Output (kW)</th><th>IT + Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>'
+    :'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>';
   for(var i=0;i<strings.length;i++){var s=strings[i];var it=normalIT[s]||0;var od=otherData[i]||{mech:0,pumps:0,misc:0};var oth=(od.mech+od.misc);
     var mainUpsOut=upsMode==='combined'?(it+od.pumps):it;
     var upsBase=mainUpsOut*(1+infraL),ui=upsBase*(1+chg+loss);
     var mechUpsOut=upsMode==='separate'?od.pumps:0;
     var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
     var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
-    nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
+    if(upsMode==='combined')nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
+    else nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
   nb.innerHTML=nhtml;
 
   var mh=document.getElementById('matrixHead');var mb=document.getElementById('matrixBody');
