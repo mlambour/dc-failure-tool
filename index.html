@@ -9,8 +9,12 @@
 :root{--bg:#0a0e17;--card:#131a2b;--border:#1e2a42;--accent:#00b4d8;--accent2:#0077b6;--text:#e0e6f0;--text2:#8892a4;--success:#00c853;--warn:#ffa726;--danger:#ef5350;--crit:#ff1744}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
 .cnt{max-width:1400px;margin:0 auto}
+.hero{position:relative;margin-bottom:24px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#0d1321}
+.hero img{display:block;width:100%;max-height:280px;object-fit:cover;opacity:0.88}
+.heroov{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,14,23,0.15) 0%,rgba(10,14,23,0.55) 55%,rgba(10,14,23,0.9) 100%);display:flex;align-items:flex-end}
+.herotx{padding:24px}
 h1{font-size:1.7rem;font-weight:700;margin-bottom:4px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.sub{color:var(--text2);font-size:0.9rem;margin-bottom:24px}
+.sub{color:var(--text2);font-size:0.9rem;margin-bottom:0}
 .cd{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px}
 .cd h2{font-size:1.1rem;margin-bottom:14px;color:var(--accent)}
 .fr{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px}
@@ -62,14 +66,16 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 .det ul{margin:10px 0 0 18px;color:var(--text2);font-size:0.85rem}
 .det li{margin-bottom:6px}
 .hidden{display:none}
-@media print{body{background:#fff;color:#000;padding:10px}.cd{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}.sumc{background:#fff;border:1px solid #ccc}}
-@media(max-width:700px){body{padding:10px}.cd{padding:14px}.fr{flex-direction:column}h1{font-size:1.3rem}}
+@media print{body{background:#fff;color:#000;padding:10px}.cd{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}.sumc{background:#fff;border:1px solid #ccc}.hero{border:1px solid #ccc}.hero img{max-height:220px}}
+@media(max-width:700px){body{padding:10px}.cd{padding:14px}.fr{flex-direction:column}h1{font-size:1.3rem}.herotx{padding:16px}.hero img{max-height:180px}}
 </style>
 </head>
 <body>
 <div class="cnt">
-<h1>⚡ DC Failure Scenario & Equipment Sizing Tool</h1>
-<p class="sub">Power String Failure Analysis — UPS, Generator & Transformer Sizing</p>
+<div class="hero">
+<img src="assets/header-datacentre.jpg" alt="Data centre server hall">
+<div class="heroov"><div class="herotx"><h1>⚡ DC Failure Scenario & Equipment Sizing Tool</h1><p class="sub">Power String Failure Analysis — UPS, Generator & Transformer Sizing</p></div></div>
+</div>
 
 <div class="cd">
 <h2>📊 System Parameters</h2>
