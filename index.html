@@ -153,7 +153,7 @@ td{padding:7px 8px;border-top:1px solid var(--border)}
 <details class="det">
 <summary>Show calculation assumptions</summary>
 <ul>
-<li>UPS sizing can be configured as either <strong>IT-only UPS</strong> with separate mechanical UPS reporting, or <strong>combined IT + mech equipment UPS</strong> where chiller electrical load is included in the main UPS sizing basis.</li>
+<li>UPS sizing can be configured as either <strong>IT-only UPS</strong> with separate mechanical UPS reporting, or <strong>combined IT + mech UPS</strong> where the entered Mech UPS load is included in the main UPS sizing basis.</li>
 <li>Mechanical / cooling / pump / miscellaneous loads <strong>do not redistribute</strong> during failure scenarios.</li>
 <li>UPS input power is calculated from UPS output plus configured charging and UPS losses.</li>
 <li>Generator sizing is based on worst-case surviving string demand with distribution losses first applied to UPS output, then UPS charging and losses applied to that adjusted UPS demand, then fixed non-IT loads added, then a further distribution loss allowance applied to the combined total before conversion by entered power factor.</li><li>In separate UPS mode, the tool also reports mechanical UPS output and input from the entered Mech UPS Loads for visibility, while generator sizing still uses the combined load basis.</li>
@@ -398,11 +398,11 @@ function calculate(){
   var nb=document.getElementById('normalBody');var nhtml='';var normalIT=scenarios['Normal'];
   var upsMode=document.getElementById('upsMode').value;
   for(var i=0;i<strings.length;i++){var s=strings[i];var it=normalIT[s]||0;var od=otherData[i]||{mech:0,pumps:0,misc:0};var oth=(od.mech+od.misc);
-    var mainUpsOut=upsMode==='combined'?(it+od.mech):it;
+    var mainUpsOut=upsMode==='combined'?(it+od.pumps):it;
     var upsBase=mainUpsOut*(1+infraL),ui=upsBase*(1+chg+loss);
     var mechUpsOut=upsMode==='separate'?od.pumps:0;
     var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
-    var genBase=ui+mechUpsIn+(upsMode==='combined'?oth-od.mech:oth),gk=genBase*(1+infraL),gv=gk/pf;
+    var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
   nb.innerHTML=nhtml;
 
@@ -426,7 +426,7 @@ function calculate(){
     var od=otherData[i]||{mech:0,pumps:0,misc:0};
     var upsMode=document.getElementById('upsMode').value;
     var oth=(od.mech+od.misc);
-    var uo=upsMode==='combined'?(w.val+od.mech):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?od.pumps:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+(upsMode==='combined'?oth-od.mech:oth),gk=genBase*(1+infraL),gv=gk/pf;
+    var uo=upsMode==='combined'?(w.val+od.pumps):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?od.pumps:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     var ic=s===wO.str,cl=ic?'cr':'v';
     if(ic){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
@@ -552,11 +552,11 @@ function exportCSV(){
   var upsMode=document.getElementById('upsMode').value;
   for(var n=0;n<strings.length;n++){
     var s=strings[n],it=normalIT[s]||0,od=otherData[n]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc);
-    var mainUpsOut=upsMode==='combined'?(it+od.mech):it;
+    var mainUpsOut=upsMode==='combined'?(it+od.pumps):it;
     var upsBase=mainUpsOut*(1+infraL),mainUpsIn=upsBase*(1+chg+loss);
     var mechUpsOut=upsMode==='separate'?od.pumps:0;
     var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
-    var genBase=mainUpsIn+mechUpsIn+(upsMode==='combined'?oth-od.mech:oth),gk=genBase*(1+infraL),gv=gk/pf;
+    var genBase=mainUpsIn+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     normalRows.push([s,it.toFixed(1),oth.toFixed(1),mainUpsOut.toFixed(1),mainUpsIn.toFixed(1),mechUpsOut.toFixed(1),mechUpsIn.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
   }
   addCsvSection(lines,'Normal Operation Summary',normalRows);
