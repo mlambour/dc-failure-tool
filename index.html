@@ -465,6 +465,7 @@ function calculate(){
   nb.innerHTML=nhtml;
 
   var mh=document.getElementById('matrixHead');var mb=document.getElementById('matrixBody');
+  var mechMh=document.getElementById('mechMatrixHead');var mechMb=document.getElementById('mechMatrixBody');
   var hh='<tr><th>String</th><th>Normal</th>';for(var i=0;i<strings.length;i++)hh+='<th>'+strings[i]+' Fails</th>';hh+='<th>Worst Case</th></tr>';mh.innerHTML=hh;
   mechMh.innerHTML=hh;
   var wO={val:0,str:'',scen:''},wPS={},mhtml='';
@@ -508,7 +509,6 @@ function calculate(){
   }
 
   var sb=document.getElementById('sizingBody');var shtml='';
-  var mechMh=document.getElementById('mechMatrixHead');var mechMb=document.getElementById('mechMatrixBody');
   var mechSb=document.getElementById('mechSizingBody');var mechMhtml='',mechShtml='';
   var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalUpsString='',criticalGenString='';
   var criticalMechUpsOut=0,criticalMechUpsIn=0,criticalMechScenario='',criticalMechString='';
