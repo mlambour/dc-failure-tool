@@ -188,6 +188,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead id="normalHead"><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
+<div class="cd" id="mechMatrixCard" style="display:none"><h2>🔋 Mech UPS Failure Scenario Matrix</h2><p class="nt">Mech UPS output on each surviving string per failure. Includes Fan Wall transfer plus other mech UPS loads.</p><div class="sx"><table><thead id="mechMatrixHead"></thead><tbody id="mechMatrixBody"></tbody></table></div></div>
 <div class="cd" id="mechSizingCard" style="display:none"><h2>🔋 Mech UPS Failure Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst Mech UPS Output (kW)</th><th>Worst Mech UPS Input (kW)</th><th>Scenario</th></tr></thead><tbody id="mechSizingBody"></tbody></table></div></div>
 <div class="br" style="margin-bottom:30px">
 <button class="btn bs" id="btnExportCsv">📊 Export CSV</button>
@@ -465,6 +466,7 @@ function calculate(){
 
   var mh=document.getElementById('matrixHead');var mb=document.getElementById('matrixBody');
   var hh='<tr><th>String</th><th>Normal</th>';for(var i=0;i<strings.length;i++)hh+='<th>'+strings[i]+' Fails</th>';hh+='<th>Worst Case</th></tr>';mh.innerHTML=hh;
+  mechMh.innerHTML=hh;
   var wO={val:0,str:'',scen:''},wPS={},mhtml='';
   for(var i=0;i<strings.length;i++){
     var s=strings[i],best=0,bestS='Normal';mhtml+='<tr><td><strong>'+s+'</strong></td>';
@@ -479,9 +481,35 @@ function calculate(){
     mhtml+='<td><span class="tg '+tc+'">'+fmt(best)+'kW</span> '+bestS+'</td></tr>';
   }
   mb.innerHTML=mhtml;
+  if(upsMode==='separate'){
+    var mechWorst={};
+    for(var mi=0;mi<strings.length;mi++){
+      var ms=strings[mi],mbest=0,mbestS='Normal';
+      mechMhtml+='<tr><td><strong>'+ms+'</strong></td>';
+      var mkeys=['Normal'];for(var mk=0;mk<strings.length;mk++)mkeys.push(strings[mk]+' Fails');
+      for(var mq=0;mq<mkeys.length;mq++){
+        var mkey=mkeys[mq];
+        if(mkey===ms+' Fails'){mechMhtml+='<td style="color:#555">—</td>';continue;}
+        var scenFan=(fanWallScenarios[mkey]&&fanWallScenarios[mkey][ms])||0;
+        var od=otherData[mi]||{mech:0,pumps:0,misc:0};
+        var mval=scenFan+od.pumps;
+        if(mval>mbest){mbest=mval;mbestS=mkey;}
+        mechMhtml+='<td>'+fmt(mval)+'</td>';
+      }
+      mechWorst[ms]={val:mbest,scen:mbestS};
+      var mtc=mbest>0?'tc':'to';
+      mechMhtml+='<td><span class="tg '+mtc+'">'+fmt(mbest)+'kW</span> '+mbestS+'</td></tr>';
+    }
+    mechMb.innerHTML=mechMhtml;
+    document.getElementById('mechMatrixCard').style.display='block';
+  } else {
+    mechMb.innerHTML='';
+    document.getElementById('mechMatrixCard').style.display='none';
+  }
 
   var sb=document.getElementById('sizingBody');var shtml='';
-  var mechSb=document.getElementById('mechSizingBody');var mechShtml='';
+  var mechMh=document.getElementById('mechMatrixHead');var mechMb=document.getElementById('mechMatrixBody');
+  var mechSb=document.getElementById('mechSizingBody');var mechMhtml='',mechShtml='';
   var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalUpsString='',criticalGenString='';
   var criticalMechUpsOut=0,criticalMechUpsIn=0,criticalMechScenario='',criticalMechString='';
   var sizingRows=[];
