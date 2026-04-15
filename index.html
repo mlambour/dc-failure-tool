@@ -493,9 +493,9 @@ function calculate(){
   sb.innerHTML=shtml;
   document.getElementById('execSummary').innerHTML=''
     +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical surviving string: '+criticalString+'</div></div>'
-    +'<div class="sumc"><h3>Minimum UPS Size</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">Worst-case UPS input requirement</div></div>'
-    +'<div class="sumc"><h3>Minimum Generator Size</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Based on worst-case generator apparent power</div></div>'
-    +'<div class="sumc"><h3>Minimum Transformer Size</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Selected from entered transformer ratings</div></div>'
+    +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">Worst-case UPS input load</div></div>'
+    +'<div class="sumc"><h3>Max Generator Load</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Worst-case generator apparent load</div></div>'
+    +'<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Selected transformer basis from available ratings</div></div>'
     +'<div class="sumc"><h3>Most Heavily Loaded String</h3><div class="sumv">'+criticalString+'</div><div class="sums">Peak failure-case UPS input: '+fmt(criticalUpsIn)+' kW</div></div>';
 
   var warnings=[];
