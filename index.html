@@ -85,6 +85,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="fg"><label>IT Load</label><div style="display:flex;gap:6px"><input type="number" id="itLoad" value="5" step="0.1" min="0.01" style="flex:1"><select id="loadUnit" style="width:70px"><option value="MW">MW</option><option value="kW">kW</option></select></div></div>
 <div class="fg"><label>Power Strings</label><input type="number" id="numStrings" value="5" min="2" max="10"></div>
 <div class="fg"><label>Rack Rows</label><input type="number" id="numRows" value="10" min="1" max="50"></div>
+<div class="fg"><label>Fan Wall Units</label><input type="number" id="numFanWalls" value="10" min="0" max="100"></div>
 </div>
 <div class="fr">
 <div class="fg"><label>UPS Charging %</label><input type="number" id="upsCharge" value="3.5" step="0.5"></div>
@@ -137,9 +138,15 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 
 <div class="cd">
+<h2>🌀 Fan Wall Units</h2>
+<p class="nt">Fan wall units are structured mech UPS loads. In normal operation, the full unit load sits on the primary string. On primary string failure, the full load transfers to the secondary string.</p>
+<div class="sx"><table class="et"><thead><tr><th>Unit</th><th>Load (kW)</th><th>Primary String</th><th>Secondary String</th></tr></thead><tbody id="fanWallBody"></tbody></table></div>
+</div>
+
+<div class="cd">
 <h2>🔋 Mech UPS Loads Per String</h2>
-<p class="nt">Dedicated mechanical UPS output loads per string, reported separately from other fixed loads.</p>
-<div class="sxl"><table class="et"><thead><tr><th>String</th><th>Mech UPS Load (kW)</th></tr></thead><tbody id="mechUpsBody"></tbody></table></div>
+<p class="nt">Other dedicated mechanical UPS output loads per string, separate from fan wall units.</p>
+<div class="sxl"><table class="et"><thead><tr><th>String</th><th>Other Mech UPS Load (kW)</th></tr></thead><tbody id="mechUpsBody"></tbody></table></div>
 </div>
 
 <div class="br"><button class="btn bp" id="btnCalc">Calculate Failure Scenarios</button></div>
@@ -156,9 +163,10 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <summary>Show calculation assumptions</summary>
 <ul>
 <li>UPS sizing can be configured as either <strong>IT-only UPS</strong> with separate mechanical UPS reporting, or <strong>combined IT + mech UPS</strong> where the entered Mech UPS load is included in the main UPS sizing basis.</li>
-<li>Mechanical / cooling / pump / miscellaneous loads <strong>do not redistribute</strong> during failure scenarios.</li>
+<li>Mechanical / cooling / miscellaneous loads <strong>do not redistribute</strong> during failure scenarios.</li>
 <li>UPS input power is calculated from UPS output plus configured charging and UPS losses.</li>
-<li>Generator sizing is based on worst-case surviving string demand with distribution losses first applied to UPS output, then UPS charging and losses applied to that adjusted UPS demand, then fixed non-IT loads added, then a further distribution loss allowance applied to the combined total before conversion by entered power factor.</li><li>In separate UPS mode, the tool also reports mechanical UPS output and input from the entered Mech UPS Loads for visibility, while generator sizing still uses the combined load basis.</li>
+<li>Generator sizing is based on worst-case surviving string demand with distribution losses first applied to UPS output, then UPS charging and losses applied to that adjusted UPS demand, then fixed non-IT loads added, then a further distribution loss allowance applied to the combined total before conversion by entered power factor.</li>
+<li>In separate UPS mode, the tool also reports mechanical UPS output and input from the entered Mech UPS loads and Fan Wall units for visibility, while generator sizing still uses the combined load basis.</li>
 <li>Transformer sizing is selected from the entered transformer rating list using the calculated generator apparent power.</li>
 <li>Dual mode assumes 50/50 split with survivor taking 100% on failure.</li>
 <li>Triple mode assumes two active feeds at 50/50 and one catcher that absorbs the lost 50% share on active-feed failure.</li>
@@ -186,23 +194,36 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 </div>
 <script>
-var SL='ABCDEFGHIJ',rowLoads=[],allocData=[],otherData=[],nStrings=5,nRows=10,mode='dual';
+var SL='ABCDEFGHIJ',rowLoads=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
 var MODES={dual:'Dual: 2 busbars per row (50/50). On failure, survivor takes 100%.',triple:'Triple: 2 active (50/50) + 1 catcher (0%). On failure, catcher picks up lost 50%.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: 2 pairs (A/B+C/D) at 25% each + catcher at 0%. On failure, catcher absorbs the lost 25%. Active strings stay at 25%.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
 function fmt(n){return n>=10?Math.round(n).toLocaleString('en'):n.toFixed(1);}
 function fmtD(n){return n.toFixed(1);}
+function buildBalancedFanWalls(count,strings){
+  var arr=[];if(strings.length===0)return arr;
+  for(var i=0;i<count;i++)arr.push({load:6.03,primary:strings[i%strings.length],secondary:strings[(i+1)%strings.length]||strings[i%strings.length]});
+  return arr;
+}
 
 function genRows(){
   nStrings=parseInt(document.getElementById('numStrings').value);
   nRows=parseInt(document.getElementById('numRows').value);
+  var nFan=parseInt(document.getElementById('numFanWalls').value)||0;
   var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;
   var oldLoads=rowLoads.slice();
   if(oldLoads.length===nRows){var oldT=0;for(var k=0;k<oldLoads.length;k++)oldT+=oldLoads[k];if(Math.abs(oldT-itKW)<0.5){rowLoads=oldLoads;}else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}}
   else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}
   var oldO=otherData.slice();otherData=[];
   for(var i=0;i<nStrings;i++){if(oldO[i])otherData.push({mech:oldO[i].mech,pumps:oldO[i].pumps,misc:oldO[i].misc});else otherData.push({mech:450,pumps:22,misc:400});}
-  renderRowLoads();renderOtherTable();renderMechUpsTable();
+  var strings=gs();
+  var oldF=fanWallData.slice();
+  fanWallData=[];
+  if(oldF.length===nFan){fanWallData=oldF;}
+  else if(oldF.length>0){
+    for(var f=0;f<nFan;f++)fanWallData.push(oldF[f]||{load:6.03,primary:strings[f%strings.length],secondary:strings[(f+1)%strings.length]||strings[f%strings.length]});
+  }else fanWallData=buildBalancedFanWalls(nFan,strings);
+  renderRowLoads();renderOtherTable();renderFanWallTable();renderMechUpsTable();
   document.getElementById('rowSection').classList.remove('hidden');
   document.getElementById('allocSection').classList.add('hidden');
   document.getElementById('results').style.display='none';
@@ -273,9 +294,7 @@ function autoAllocate(){
 function retainAlloc(){
   mode=document.getElementById('distMode').value;
   if(allocData.length===0){alert('Run Auto-Balance first to create an initial allocation.');return;}
-  for(var i=0;i<allocData.length;i++){
-    allocData[i].load=rowLoads[i]!==undefined?rowLoads[i]:allocData[i].load;
-  }
+  for(var i=0;i<allocData.length;i++)allocData[i].load=rowLoads[i]!==undefined?rowLoads[i]:allocData[i].load;
   renderAllocTable(null);recalcBalance();
   document.getElementById('allocSection').classList.remove('hidden');
 }
@@ -306,8 +325,7 @@ function renderAllocTable(sLoad){
     var ai=parseInt(e.target.getAttribute('data-ai'));var f=e.target.getAttribute('data-f');
     allocData[ai][f]=e.target.value;recalcBalance();
   });});
-  if(!sLoad){sLoad={};for(var i=0;i<strings.length;i++)sLoad[strings[i]]=0;recalcBalanceFromData(sLoad);}
-  showBalance(sLoad);
+  if(!sLoad){sLoad={};for(var i=0;i<strings.length;i++)sLoad[strings[i]]=0;recalcBalanceFromData(sLoad);}showBalance(sLoad);
 }
 
 function recalcBalance(){
@@ -336,20 +354,43 @@ function renderOtherTable(){
     html+='<tr><td><strong>'+strings[i]+'</strong></td>';
     html+='<td><input type="number" data-oi="'+i+'" data-f="mech" value="'+o.mech+'" step="1" min="0"></td>';
     html+='<td><input type="number" data-oi="'+i+'" data-f="misc" value="'+o.misc+'" step="1" min="0"></td>';
-    html+='<td class="v">'+fmt(tot)+'</td></tr>';}
-  tb.innerHTML=html;
-  tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
-    var oi=parseInt(e.target.getAttribute('data-oi'));var f=e.target.getAttribute('data-f');
-    otherData[oi][f]=parseFloat(e.target.value)||0;renderOtherTable();});});
-}
-function renderMechUpsTable(){
-  var strings=gs();var tb=document.getElementById('mechUpsBody');var html='';
-  for(var i=0;i<otherData.length;i++){
-    html+='<tr><td><strong>'+strings[i]+'</strong></td><td><input type="number" data-mi="'+i+'" value="'+otherData[i].pumps+'" step="1" min="0"></td></tr>';
+    html+='<td class="v">'+fmt(tot)+'</td></tr>';
   }
   tb.innerHTML=html;
   tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
-    var mi=parseInt(e.target.getAttribute('data-mi'));otherData[mi].pumps=parseFloat(e.target.value)||0;});});
+    var oi=parseInt(e.target.getAttribute('data-oi'));var f=e.target.getAttribute('data-f');
+    otherData[oi][f]=parseFloat(e.target.value)||0;renderOtherTable();
+  });});
+}
+function renderFanWallTable(){
+  var strings=gs(),tb=document.getElementById('fanWallBody'),html='';
+  function opts(sel){var h='';for(var j=0;j<strings.length;j++)h+='<option'+(strings[j]===sel?' selected':'')+'>'+strings[j]+'</option>';return h;}
+  for(var i=0;i<fanWallData.length;i++){
+    var f=fanWallData[i];
+    html+='<tr><td><strong>FW-'+(i+1)+'</strong></td><td><input type="number" data-fi="'+i+'" data-f="load" value="'+f.load+'" step="0.01" min="0"></td><td><select data-fi="'+i+'" data-f="primary">'+opts(f.primary)+'</select></td><td><select data-fi="'+i+'" data-f="secondary">'+opts(f.secondary)+'</select></td></tr>';
+  }
+  tb.innerHTML=html;
+  tb.querySelectorAll('input,select').forEach(function(el){el.addEventListener('change',function(e){
+    var fi=parseInt(e.target.getAttribute('data-fi')),fld=e.target.getAttribute('data-f');
+    fanWallData[fi][fld]=fld==='load'?(parseFloat(e.target.value)||0):e.target.value;
+  });});
+}
+function renderMechUpsTable(){
+  var strings=gs();var tb=document.getElementById('mechUpsBody');var html='';
+  for(var i=0;i<otherData.length;i++)html+='<tr><td><strong>'+strings[i]+'</strong></td><td><input type="number" data-mi="'+i+'" value="'+otherData[i].pumps+'" step="1" min="0"></td></tr>';
+  tb.innerHTML=html;
+  tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
+    var mi=parseInt(e.target.getAttribute('data-mi'));otherData[mi].pumps=parseFloat(e.target.value)||0;
+  });});
+}
+function calcFanWallLoads(failString){
+  var strings=gs();var load={};for(var i=0;i<strings.length;i++)load[strings[i]]=0;
+  for(var j=0;j<fanWallData.length;j++){
+    var fw=fanWallData[j],target=(failString&&fw.primary===failString)?fw.secondary:fw.primary;
+    if(target&&load[target]!==undefined)load[target]+=fw.load;
+  }
+  if(failString)delete load[failString];
+  return load;
 }
 
 function calcIT(failString){
@@ -357,8 +398,8 @@ function calcIT(failString){
   for(var i=0;i<allocData.length;i++){
     var r=allocData[i];
     if(mode==='dual'){
-      if(failString&&r.a===failString){load[r.b]+=r.load;}
-      else if(failString&&r.b===failString){load[r.a]+=r.load;}
+      if(failString&&r.a===failString)load[r.b]+=r.load;
+      else if(failString&&r.b===failString)load[r.a]+=r.load;
       else{load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
     }else if(mode==='triple'){
       if(failString&&r.a===failString){load[r.b]+=r.load/2;load[r.c]+=r.load/2;}
@@ -370,16 +411,10 @@ function calcIT(failString){
       if(failString===r.a)load[r.b]+=ab;else if(failString===r.b)load[r.a]+=ab;else{load[r.a]+=ab/2;load[r.b]+=ab/2;}
       if(failString===r.c)load[r.d]+=cd;else if(failString===r.d)load[r.c]+=cd;else{load[r.c]+=cd/2;load[r.d]+=cd/2;}
     }else{
-      var q=r.load/4;
-      var actives=[r.a,r.b,r.c,r.d],catcher=r.e;
-      if(failString===catcher){
-        for(var z=0;z<actives.length;z++)load[actives[z]]+=q;
-      }else if(actives.indexOf(failString)>=0){
-        load[catcher]+=q;
-        for(var z=0;z<actives.length;z++){if(actives[z]!==failString)load[actives[z]]+=q;}
-      }else{
-        for(var z=0;z<actives.length;z++)load[actives[z]]+=q;
-      }
+      var q=r.load/4;var actives=[r.a,r.b,r.c,r.d],catcher=r.e;
+      if(failString===catcher){for(var z=0;z<actives.length;z++)load[actives[z]]+=q;}
+      else if(actives.indexOf(failString)>=0){load[catcher]+=q;for(var z=0;z<actives.length;z++)if(actives[z]!==failString)load[actives[z]]+=q;}
+      else{for(var z=0;z<actives.length;z++)load[actives[z]]+=q;}
     }
   }
   if(failString)delete load[failString];return load;
@@ -393,51 +428,56 @@ function calculate(){
   var pf=parseFloat(document.getElementById('pf').value);
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
-  var scenarios={};scenarios['Normal']=calcIT(null);
-  for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
-  var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.pumps+o.misc;}
+  var scenarios={};scenarios['Normal']=calcIT(null);for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
+  var fanWallScenarios={};fanWallScenarios['Normal']=calcFanWallLoads(null);for(var fs=0;fs<strings.length;fs++)fanWallScenarios[strings[fs]+' Fails']=calcFanWallLoads(strings[fs]);
+  var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.misc;}
 
   var nb=document.getElementById('normalBody');var nh=document.getElementById('normalHead');var nhtml='';var normalIT=scenarios['Normal'];
   var upsMode=document.getElementById('upsMode').value;
   nh.innerHTML=upsMode==='combined'
     ?'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT + Mech UPS Output (kW)</th><th>IT + Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>'
     :'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>';
-  for(var i=0;i<strings.length;i++){var s=strings[i];var it=normalIT[s]||0;var od=otherData[i]||{mech:0,pumps:0,misc:0};var oth=(od.mech+od.misc);
-    var mainUpsOut=upsMode==='combined'?(it+od.pumps):it;
+  for(var i=0;i<strings.length;i++){
+    var s=strings[i],it=normalIT[s]||0,od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=fanWallScenarios['Normal'][s]||0;
+    var mechUpsTotal=fanWallLoad+od.pumps;
+    var mainUpsOut=upsMode==='combined'?(it+mechUpsTotal):it;
     var upsBase=mainUpsOut*(1+infraL),ui=upsBase*(1+chg+loss);
-    var mechUpsOut=upsMode==='separate'?od.pumps:0;
+    var mechUpsOut=upsMode==='separate'?mechUpsTotal:0;
     var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
     var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     if(upsMode==='combined')nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
-    else nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';}
+    else nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
+  }
   nb.innerHTML=nhtml;
 
   var mh=document.getElementById('matrixHead');var mb=document.getElementById('matrixBody');
   var hh='<tr><th>String</th><th>Normal</th>';for(var i=0;i<strings.length;i++)hh+='<th>'+strings[i]+' Fails</th>';hh+='<th>Worst Case</th></tr>';mh.innerHTML=hh;
   var wO={val:0,str:'',scen:''},wPS={},mhtml='';
-  for(var i=0;i<strings.length;i++){var s=strings[i];var best=0,bestS='Normal';
-    mhtml+='<tr><td><strong>'+s+'</strong></td>';
+  for(var i=0;i<strings.length;i++){
+    var s=strings[i],best=0,bestS='Normal';mhtml+='<tr><td><strong>'+s+'</strong></td>';
     var sk=['Normal'];for(var j=0;j<strings.length;j++)sk.push(strings[j]+' Fails');
-    for(var k=0;k<sk.length;k++){var sc=scenarios[sk[k]];
+    for(var k=0;k<sk.length;k++){
+      var sc=scenarios[sk[k]];
       if(sk[k]===s+' Fails'){mhtml+='<td style="color:#555">—</td>';continue;}
-      var val=sc[s]||0;if(val>best){best=val;bestS=sk[k];}mhtml+='<td>'+fmt(val)+'</td>';}
+      var val=sc[s]||0;if(val>best){best=val;bestS=sk[k];}mhtml+='<td>'+fmt(val)+'</td>';
+    }
     wPS[s]={val:best,scen:bestS};if(best>wO.val){wO.val=best;wO.str=s;wO.scen=bestS;}
     var tc=best>normalIT[s]*1.3?'tc':(best>normalIT[s]*1.1?'tw':'to');
-    mhtml+='<td><span class="tg '+tc+'">'+fmt(best)+'kW</span> '+bestS+'</td></tr>';}
+    mhtml+='<td><span class="tg '+tc+'">'+fmt(best)+'kW</span> '+bestS+'</td></tr>';
+  }
   mb.innerHTML=mhtml;
 
   var sb=document.getElementById('sizingBody');var shtml='';
   var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalString='';
-  for(var i=0;i<strings.length;i++){var s=strings[i];var w=wPS[s];var oth=oLoad[s]||0;
-    var od=otherData[i]||{mech:0,pumps:0,misc:0};
-    var upsMode=document.getElementById('upsMode').value;
-    var oth=(od.mech+od.misc);
-    var uo=upsMode==='combined'?(w.val+od.pumps):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?od.pumps:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
+  for(var i=0;i<strings.length;i++){
+    var s=strings[i],w=wPS[s],od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
+    var mechUpsTotal=fanWallLoad+od.pumps;
+    var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
     var ic=s===wO.str,cl=ic?'cr':'v';
     if(ic){criticalUpsOut=uo;criticalUpsIn=ui;criticalGen=gv;criticalTx=txRt;criticalScenario=w.scen;criticalString=s;}
-    shtml+='<tr><td><strong>'+s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td>';
-    shtml+='<td class="'+cl+'">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="'+cl+'">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td><td class="v">'+txRt+'</td><td>'+w.scen+'</td></tr>';}
+    shtml+='<tr><td><strong>'+s+'</strong>'+(ic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+cl+'">'+fmt(uo)+'</td><td>'+fmt(ui)+'</td><td class="'+cl+'">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td><td class="v">'+txRt+'</td><td>'+w.scen+'</td></tr>';
+  }
   sb.innerHTML=shtml;
   document.getElementById('execSummary').innerHTML=''
     +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical surviving string: '+criticalString+'</div></div>'
@@ -465,15 +505,15 @@ function calculate(){
   if(txR.length===0)warnings.push({level:'high',title:'No Valid Transformer Ratings',text:'Transformer ratings list is empty or invalid, so sizing selection may be unreliable.'});
 
   for(var wr=0;wr<allocData.length;wr++){
-    var rr=allocData[wr],feeds=[];
-    if(rr.a)feeds.push(rr.a);if(rr.b)feeds.push(rr.b);if(rr.c)feeds.push(rr.c);if(rr.d)feeds.push(rr.d);if(rr.e)feeds.push(rr.e);
+    var rr=allocData[wr],feeds=[];if(rr.a)feeds.push(rr.a);if(rr.b)feeds.push(rr.b);if(rr.c)feeds.push(rr.c);if(rr.d)feeds.push(rr.d);if(rr.e)feeds.push(rr.e);
     var uniq={};var dup=false;for(var wu=0;wu<feeds.length;wu++){if(uniq[feeds[wu]]){dup=true;break;}uniq[feeds[wu]]=true;}
     if(dup){warnings.push({level:'high',title:'Duplicate Feed Selection Detected',text:'Row '+(wr+1)+' contains duplicate string assignments. Review busbar selections.'});break;}
   }
+  for(var fw=0;fw<fanWallData.length;fw++)if(fanWallData[fw].primary===fanWallData[fw].secondary){warnings.push({level:'med',title:'Fan Wall Primary/Secondary Match',text:'Fan wall FW-'+(fw+1)+' has the same primary and secondary string. Review if transfer redundancy is intended.'});break;}
 
   var wb=document.getElementById('warningBox');
-  if(warnings.length===0){wb.innerHTML='<div class="warn warn-low"><strong>No validation warnings</strong>Inputs and allocation passed the current validation checks.</div>';}
-  else{wb.innerHTML=warnings.map(function(w){return '<div class="warn warn-'+w.level+'"><strong>'+w.title+'</strong>'+w.text+'</div>';}).join('');}
+  if(warnings.length===0)wb.innerHTML='<div class="warn warn-low"><strong>No validation warnings</strong>Inputs and allocation passed the current validation checks.</div>';
+  else wb.innerHTML=warnings.map(function(w){return '<div class="warn warn-'+w.level+'"><strong>'+w.title+'</strong>'+w.text+'</div>';}).join('');
 
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
@@ -481,23 +521,19 @@ function calculate(){
 function exportXML(){
   if(allocData.length===0){alert('Generate and allocate first.');return;}
   var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool>\n  <params>\n';
-  var ids=['itLoad','loadUnit','numStrings','numRows','upsCharge','upsLoss','pf','infraLoss','txRatings'];
+  var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','pf','infraLoss','txRatings','upsMode'];
   for(var i=0;i<ids.length;i++)x+='    <'+ids[i]+'>'+document.getElementById(ids[i]).value+'</'+ids[i]+'>\n';
   x+='    <distMode>'+mode+'</distMode>\n  </params>\n  <rows>\n';
-  for(var i=0;i<allocData.length;i++){var r=allocData[i];
-    x+='    <row num="'+(i+1)+'" load="'+r.load+'" a="'+r.a+'" b="'+r.b+'"';
-    if(r.c)x+=' c="'+r.c+'"';if(r.d)x+=' d="'+r.d+'"';if(r.e)x+=' e="'+r.e+'"';x+='/>\n';}
-  x+='  </rows>\n  <otherLoads>\n';var strings=gs();
+  for(var i=0;i<allocData.length;i++){var r=allocData[i];x+='    <row num="'+(i+1)+'" load="'+r.load+'" a="'+r.a+'" b="'+r.b+'"'+(r.c?' c="'+r.c+'"':'')+(r.d?' d="'+r.d+'"':'')+(r.e?' e="'+r.e+'"':'')+'/>\n';}
+  x+='  </rows>\n  <fanWalls>\n';
+  for(var f=0;f<fanWallData.length;f++){var fw=fanWallData[f];x+='    <fanWall num="'+(f+1)+'" load="'+fw.load+'" primary="'+fw.primary+'" secondary="'+fw.secondary+'"/>\n';}
+  x+='  </fanWalls>\n  <otherLoads>\n';var strings=gs();
   for(var i=0;i<otherData.length;i++){var o=otherData[i];x+='    <string id="'+strings[i]+'" mech="'+o.mech+'" pumps="'+o.pumps+'" misc="'+o.misc+'"/>\n';}
   x+='  </otherLoads>\n</DCFailureTool>';
   var blob=new Blob([x],{type:'application/xml'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario.xml';a.click();
 }
 function csvEsc(v){var s=v==null?'':String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
-function addCsvSection(lines,title,rows){
-  lines.push(csvEsc(title));
-  for(var i=0;i<rows.length;i++)lines.push(rows[i].map(csvEsc).join(','));
-  lines.push('');
-}
+function addCsvSection(lines,title,rows){lines.push(csvEsc(title));for(var i=0;i<rows.length;i++)lines.push(rows[i].map(csvEsc).join(','));lines.push('');}
 function exportCSV(){
   if(allocData.length===0){alert('Generate and allocate first.');return;}
   var strings=gs();
@@ -506,110 +542,56 @@ function exportCSV(){
   var pf=parseFloat(document.getElementById('pf').value);
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
-  var scenarios={};scenarios['Normal']=calcIT(null);
-  for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
-  var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i]||{mech:0,pumps:0,misc:0};oLoad[strings[i]]=o.mech+o.pumps+o.misc;}
+  var scenarios={};scenarios['Normal']=calcIT(null);for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
+  var fanWallScenarios={};fanWallScenarios['Normal']=calcFanWallLoads(null);for(var fs=0;fs<strings.length;fs++)fanWallScenarios[strings[fs]+' Fails']=calcFanWallLoads(strings[fs]);
+  var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i]||{mech:0,pumps:0,misc:0};oLoad[strings[i]]=o.mech+o.misc;}
   var lines=[];
-
   addCsvSection(lines,'System Parameters',[
-    ['Parameter','Value'],
-    ['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],
-    ['Power Strings',document.getElementById('numStrings').value],
-    ['Rack Rows',document.getElementById('numRows').value],
-    ['Distribution Mode',mode],
-    ['UPS Charging %',document.getElementById('upsCharge').value],
-    ['UPS Losses %',document.getElementById('upsLoss').value],
-    ['Power Factor',document.getElementById('pf').value],
-    ['Distribution Loss %',document.getElementById('infraLoss').value],
-    ['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
+    ['Parameter','Value'],['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],['Power Strings',document.getElementById('numStrings').value],['Rack Rows',document.getElementById('numRows').value],['Fan Wall Units',document.getElementById('numFanWalls').value],['Distribution Mode',mode],['UPS Configuration',document.getElementById('upsMode').value],['UPS Charging %',document.getElementById('upsCharge').value],['UPS Losses %',document.getElementById('upsLoss').value],['Power Factor',document.getElementById('pf').value],['Distribution Loss %',document.getElementById('infraLoss').value],['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
   ]);
-
-  var rowHdr=['Row','Load (kW)'];
-  if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);
-  else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);
-  else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);
-  else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
-  var rowRows=[rowHdr];
-  for(var r=0;r<allocData.length;r++){
-    var ar=[r+1,allocData[r].load,allocData[r].a,allocData[r].b];
-    if(mode==='triple')ar.push(allocData[r].c);
-    if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);
-    if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);
-    rowRows.push(ar);
-  }
-  addCsvSection(lines,'Row Allocation',rowRows);
-
-  var otherRows=[['String','Chiller Electrical Load (kW)','Misc (kW)','Total (kW)']];
-  for(var j=0;j<strings.length;j++){
-    var od=otherData[j]||{mech:0,pumps:0,misc:0};
-    otherRows.push([strings[j],od.mech,od.misc,od.mech+od.misc]);
-  }
-  addCsvSection(lines,'Other Loads',otherRows);
-
-  var mechUpsRows=[['String','Mech UPS Load (kW)']];
-  for(var mj=0;mj<strings.length;mj++){
-    var mod=otherData[mj]||{mech:0,pumps:0,misc:0};
-    mechUpsRows.push([strings[mj],mod.pumps]);
-  }
-  addCsvSection(lines,'Mech UPS Loads',mechUpsRows);
-
+  var rowHdr=['Row','Load (kW)'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
+  var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
+  var otherRows=[['String','Chiller Electrical Load (kW)','Misc (kW)','Total (kW)']];for(var j=0;j<strings.length;j++){var od=otherData[j]||{mech:0,pumps:0,misc:0};otherRows.push([strings[j],od.mech,od.misc,od.mech+od.misc]);}addCsvSection(lines,'Other Loads',otherRows);
+  var fanWallRows=[['Unit','Load (kW)','Primary String','Secondary String']];for(var fw=0;fw<fanWallData.length;fw++)fanWallRows.push(['FW-'+(fw+1),fanWallData[fw].load,fanWallData[fw].primary,fanWallData[fw].secondary]);addCsvSection(lines,'Fan Wall Units',fanWallRows);
+  var mechUpsRows=[['String','Other Mech UPS Load (kW)']];for(var mj=0;mj<strings.length;mj++){var mod=otherData[mj]||{mech:0,pumps:0,misc:0};mechUpsRows.push([strings[mj],mod.pumps]);}addCsvSection(lines,'Mech UPS Loads',mechUpsRows);
   var normalRows=[['String','IT Load (kW)','Other Load (kW)','IT UPS Output (kW)','IT UPS Input (kW)','Mech UPS Output (kW)','Mech UPS Input (kW)','Gen Load (kW)','Gen (kVA)']];
-  var normalIT=scenarios['Normal'];
-  var upsMode=document.getElementById('upsMode').value;
+  var normalIT=scenarios['Normal'];var upsMode=document.getElementById('upsMode').value;
   for(var n=0;n<strings.length;n++){
-    var s=strings[n],it=normalIT[s]||0,od=otherData[n]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc);
-    var mainUpsOut=upsMode==='combined'?(it+od.pumps):it;
-    var upsBase=mainUpsOut*(1+infraL),mainUpsIn=upsBase*(1+chg+loss);
-    var mechUpsOut=upsMode==='separate'?od.pumps:0;
-    var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
-    var genBase=mainUpsIn+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
+    var s=strings[n],it=normalIT[s]||0,od=otherData[n]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=fanWallScenarios['Normal'][s]||0,mechUpsTotal=fanWallLoad+od.pumps;
+    var mainUpsOut=upsMode==='combined'?(it+mechUpsTotal):it,upsBase=mainUpsOut*(1+infraL),mainUpsIn=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=mainUpsIn+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
     normalRows.push([s,it.toFixed(1),oth.toFixed(1),mainUpsOut.toFixed(1),mainUpsIn.toFixed(1),mechUpsOut.toFixed(1),mechUpsIn.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
   }
   addCsvSection(lines,'Normal Operation Summary',normalRows);
-
-  var matrixRows=[['String','Normal'].concat(strings.map(function(s){return s+' Fails';})).concat(['Worst Case','Worst Scenario'])];
-  var worstPerString={};
+  var matrixRows=[['String','Normal'].concat(strings.map(function(s){return s+' Fails';})).concat(['Worst Case','Worst Scenario'])];var worstPerString={};
   for(var m=0;m<strings.length;m++){
-    var ss=strings[m],best=0,bestS='Normal',row=[ss];
-    var keys=['Normal'];for(var kk=0;kk<strings.length;kk++)keys.push(strings[kk]+' Fails');
-    for(var q=0;q<keys.length;q++){
-      var key=keys[q],sc=scenarios[key];
-      if(key===ss+' Fails'){row.push('—');continue;}
-      var val=sc[ss]||0;if(val>best){best=val;bestS=key;}row.push(val.toFixed(1));
-    }
-    worstPerString[ss]={val:best,scen:bestS};
-    row.push(best.toFixed(1),bestS);
-    matrixRows.push(row);
+    var ss=strings[m],best=0,bestS='Normal',row=[ss],keys=['Normal'];for(var kk=0;kk<strings.length;kk++)keys.push(strings[kk]+' Fails');
+    for(var q=0;q<keys.length;q++){var key=keys[q],sc=scenarios[key];if(key===ss+' Fails'){row.push('—');continue;}var val=sc[ss]||0;if(val>best){best=val;bestS=key;}row.push(val.toFixed(1));}
+    worstPerString[ss]={val:best,scen:bestS};row.push(best.toFixed(1),bestS);matrixRows.push(row);
   }
   addCsvSection(lines,'Failure Scenario Matrix',matrixRows);
-
   var sizingRows=[['String','Worst UPS Out (kW)','UPS Input (kW)','Gen (kW)','Gen (kVA)','Transformer (kVA)','Scenario']];
   for(var z=0;z<strings.length;z++){
-    var st=strings[z],w=worstPerString[st],othl=oLoad[st]||0,wuo=w.val,wui=wuo*(1+chg+loss),wgk=wui+othl,wgv=wgk/pf,txL=wgv*(1+infraL),txRt=txR.length?txR[txR.length-1]:'';
-    for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
-    sizingRows.push([st,wuo.toFixed(1),wui.toFixed(1),wgk.toFixed(1),wgv.toFixed(1),txRt,w.scen]);
+    var st=strings[z],w=worstPerString[st],od=otherData[z]||{mech:0,pumps:0,misc:0},othl=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][st])||0,mechUpsTotal=fanWallLoad+od.pumps,wuo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,wui=wuo*(1+infraL)*(1+chg+loss),wMechUpsIn=upsMode==='separate'&&mechUpsTotal>0?mechUpsTotal*(1+infraL)*(1+chg+loss):0,wgk=(wui+wMechUpsIn+othl)*(1+infraL),wgv=wgk/pf,txL=wgv,txRt=txR.length?txR[txR.length-1]:'';
+    for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}sizingRows.push([st,wuo.toFixed(1),wui.toFixed(1),wgk.toFixed(1),wgv.toFixed(1),txRt,w.scen]);
   }
   addCsvSection(lines,'Equipment Sizing',sizingRows);
-
-  var blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario-report.csv';a.click();
+  var blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario-report.csv';a.click();
 }
 function importXML(file){
   var reader=new FileReader();reader.onload=function(e){try{
     var doc=new DOMParser().parseFromString(e.target.result,'text/xml');var p=doc.querySelector('params');
     if(p){var gv=function(t){var el=p.querySelector(t);return el?el.textContent:'';};
-      var ids=['itLoad','loadUnit','numStrings','numRows','upsCharge','upsLoss','pf','infraLoss','txRatings'];
+      var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','pf','infraLoss','txRatings','upsMode'];
       for(var i=0;i<ids.length;i++){var v=gv(ids[i]);if(v)document.getElementById(ids[i]).value=v;}
       mode=gv('distMode')||'dual';document.getElementById('distMode').value=mode;document.getElementById('modeDesc').textContent=MODES[mode];}
     nStrings=parseInt(document.getElementById('numStrings').value);nRows=parseInt(document.getElementById('numRows').value);
     var rows=doc.querySelectorAll('rows row');rowLoads=[];allocData=[];
-    for(var i=0;i<rows.length;i++){var r=rows[i];var ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);
-      var rd={load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''};allocData.push(rd);}
+    for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''});}
+    var fwRows=doc.querySelectorAll('fanWalls fanWall');fanWallData=[];for(var f=0;f<fwRows.length;f++){var fw=fwRows[f];fanWallData.push({load:parseFloat(fw.getAttribute('load'))||6.03,primary:fw.getAttribute('primary')||'A',secondary:fw.getAttribute('secondary')||'B'});}    
     var oL=doc.querySelectorAll('otherLoads string');otherData=[];
     for(var i=0;i<oL.length;i++){var ol=oL[i];otherData.push({mech:parseFloat(ol.getAttribute('mech'))||0,pumps:parseFloat(ol.getAttribute('pumps'))||0,misc:parseFloat(ol.getAttribute('misc'))||0});}
-    renderRowLoads();renderAllocTable(null);recalcBalance();renderOtherTable();renderMechUpsTable();
-    document.getElementById('rowSection').classList.remove('hidden');document.getElementById('allocSection').classList.remove('hidden');
-    document.getElementById('results').style.display='none';
+    renderRowLoads();renderAllocTable(null);recalcBalance();renderOtherTable();renderFanWallTable();renderMechUpsTable();
+    document.getElementById('rowSection').classList.remove('hidden');document.getElementById('allocSection').classList.remove('hidden');document.getElementById('results').style.display='none';
   }catch(err){alert('Error: '+err.message);}};reader.readAsText(file);
 }
 
