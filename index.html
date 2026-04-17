@@ -737,15 +737,15 @@ function exportScenarioTemplate(){
   if(allocData.length===0){alert('Complete Step 1 and Step 2 first, then Calculate.');return;}
   var nScen=parseInt(document.getElementById('numScenarios').value)||3;
   var wb=XLSX.utils.book_new();
-  var header=['Row'];for(var s=1;s<=nScen;s++)header.push('Scenario '+s+' (kW)');
+  var header=['Row','S0 - Baseline (kW)'];for(var s=1;s<=nScen;s++)header.push('S'+s+' (kW)');
   var data=[header];
   for(var i=0;i<rowLoads.length;i++){
-    var row=['Row '+(i+1)];
+    var row=['Row '+(i+1),rowLoads[i]];
     for(var s=0;s<nScen;s++)row.push('');
     data.push(row);
   }
   var ws=XLSX.utils.aoa_to_sheet(data);
-  var colW=[{wch:8}];for(var s=0;s<nScen;s++)colW.push({wch:18});
+  var colW=[{wch:8},{wch:20}];for(var s=0;s<nScen;s++)colW.push({wch:18});
   ws['!cols']=colW;
   XLSX.utils.book_append_sheet(wb,ws,'Scenarios');
   XLSX.writeFile(wb,'scenario-template.xlsx');
@@ -759,17 +759,17 @@ function importScenarioFile(file){
     var data=XLSX.utils.sheet_to_json(ws,{header:1});
     if(data.length<2){alert('Template appears empty.');return;}
     var headerRow=data[0];
-    var nScen=headerRow.length-1;
-    if(nScen<1){alert('No scenario columns found.');return;}
+    var nCols=headerRow.length;
+    if(nCols<3){alert('No additional scenario columns found (need S1+ columns beyond baseline).');return;}
     var scenarioLoads=[];
-    for(var s=0;s<nScen;s++){
+    for(var s=2;s<nCols;s++){
       var loads=[];
       for(var r=1;r<data.length;r++){
-        var v=parseFloat(data[r][s+1]);
+        var v=parseFloat(data[r][s]);
         if(isNaN(v))continue;
         loads.push(v);
       }
-      if(loads.length>0)scenarioLoads.push({name:headerRow[s+1]||('Scenario '+(s+1)),loads:loads});
+      if(loads.length>0)scenarioLoads.push({name:headerRow[s]||('S'+(s-1)),loads:loads});
     }
     if(scenarioLoads.length===0){alert('No valid scenario data found.');return;}
     runMultiScenario(scenarioLoads);
