@@ -200,9 +200,9 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 
 <div class="cd">
 <h2>🔄 Multi-Scenario Comparison</h2>
-<p class="nt">Export a scenario template with current row loads as Scenario 1. Fill in additional scenario loads offline, then import to run all scenarios and compare results.</p>
+<p class="nt">Current configuration is Scenario 0 (baseline). Export a template for additional scenarios, fill in different row loads, then import to compare all results side by side.</p>
 <div class="fr">
-<div class="fg"><label>Number of Scenarios</label><input type="number" id="numScenarios" value="3" min="2" max="20"></div>
+<div class="fg"><label>Additional Scenarios</label><input type="number" id="numScenarios" value="3" min="1" max="20"></div>
 </div>
 <div class="br" style="margin-top:10px">
 <button class="btn bp bsm" id="btnScenarioExport">📤 Export Scenario Template (.xlsx)</button>
@@ -741,8 +741,7 @@ function exportScenarioTemplate(){
   var data=[header];
   for(var i=0;i<rowLoads.length;i++){
     var row=['Row '+(i+1)];
-    row.push(rowLoads[i]);
-    for(var s=1;s<nScen;s++)row.push('');
+    for(var s=0;s<nScen;s++)row.push('');
     data.push(row);
   }
   var ws=XLSX.utils.aoa_to_sheet(data);
@@ -778,6 +777,7 @@ function importScenarioFile(file){
 }
 
 function runMultiScenario(scenarioLoads){
+  scenarioLoads.unshift({name:'S0 — Baseline',loads:rowLoads.slice()});
   var strings=gs();
   var chg=parseFloat(document.getElementById('upsCharge').value)/100;
   var loss=parseFloat(document.getElementById('upsLoss').value)/100;
