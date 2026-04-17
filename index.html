@@ -212,6 +212,10 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div id="scenarioResults" style="display:none;margin-top:16px">
 <h3 style="color:var(--accent);margin-bottom:10px">📋 Scenario Comparison Summary</h3>
 <div class="sx"><table><thead id="scenarioHead"></thead><tbody id="scenarioBody"></tbody></table></div>
+<div class="br" style="margin-top:12px">
+<button class="btn bp bsm" id="btnScenarioPrint">📄 Print Scenario Report</button>
+<button class="btn bs bsm" id="btnScenarioXlsx">📊 Export Scenario Summary (.xlsx)</button>
+</div>
 </div>
 </div>
 </div>
@@ -845,7 +849,7 @@ function runMultiScenario(scenarioLoads){
   rowLoads=savedLoads;
   allocData=savedAlloc;
   var sh=document.getElementById('scenarioHead'),sb=document.getElementById('scenarioBody');
-  var hh='<tr><th>Metric</th>';for(var i=0;i<results.length;i++)hh+='<th>'+results[i].name+'</th>';hh+='</tr>';
+  var hh='<tr><th>Metric</th>';for(var i=0;i<results.length;i++)hh+='<th>'+results[i].name+'</th>';hh+='<th style="background:rgba(255,23,68,0.1);color:var(--crit)">Worst Case</th></tr>';
   sh.innerHTML=hh;
   var metrics=[
     {label:'Total IT Load (kW)',fn:function(r){return fmt(r.totalIT);}},
@@ -864,15 +868,53 @@ function runMultiScenario(scenarioLoads){
       {label:'Max Mech UPS Input (kW)',fn:function(r){return r.critMechIn>0?fmt(r.critMechIn):'\u2014';}}
     );
   }
-  var bhtml='';
+  var numericMetrics={'Total IT Load (kW)':true,'Max UPS Output (kW)':true,'Max UPS Input (kW)':true,'Max Generator (kVA)':true,'Transformer (kVA)':true,'Max Mech UPS Output (kW)':true,'Max Mech UPS Input (kW)':true};
+  var bhtml='';var scenarioTableData=[];
   for(var m=0;m<metrics.length;m++){
     bhtml+='<tr><td><strong>'+metrics[m].label+'</strong></td>';
-    for(var i=0;i<results.length;i++)bhtml+='<td>'+metrics[m].fn(results[i])+'</td>';
+    var vals=[];var maxVal=0;var maxIdx=0;var isNum=numericMetrics[metrics[m].label];
+    for(var i=0;i<results.length;i++){
+      var v=metrics[m].fn(results[i]);
+      vals.push(v);
+      if(isNum){var nv=parseFloat(String(v).replace(/,/g,''));if(!isNaN(nv)&&nv>maxVal){maxVal=nv;maxIdx=i;}}
+      bhtml+='<td>'+v+'</td>';
+    }
+    if(isNum){
+      bhtml+='<td class="cr"><strong>'+vals[maxIdx]+'</strong><br><span style="font-size:0.75rem;color:var(--text2)">'+results[maxIdx].name+'</span></td>';
+    }else{
+      bhtml+='<td class="cr"><strong>'+vals[maxIdx]+'</strong></td>';
+    }
+    var rowData=[metrics[m].label];for(var i=0;i<vals.length;i++)rowData.push(vals[i]);rowData.push(isNum?vals[maxIdx]+' ('+results[maxIdx].name+')':vals[maxIdx]);
+    scenarioTableData.push(rowData);
     bhtml+='</tr>';
   }
   sb.innerHTML=bhtml;
+  window._scenarioTableData=scenarioTableData;
+  window._scenarioHeaders=['Metric'];for(var i=0;i<results.length;i++)window._scenarioHeaders.push(results[i].name);window._scenarioHeaders.push('Worst Case');
   document.getElementById('scenarioResults').style.display='block';
   document.getElementById('scenarioResults').scrollIntoView({behavior:'smooth'});
+}
+
+function printScenarioReport(){
+  var el=document.getElementById('scenarioResults');
+  if(!el||el.style.display==='none'){alert('Run scenarios first.');return;}
+  var w=window.open('','_blank');
+  w.document.write('<html><head><title>Scenario Comparison Report</title><style>body{font-family:Segoe UI,system-ui,sans-serif;padding:20px;color:#222}h2{color:#0077b6}table{width:100%;border-collapse:collapse;font-size:0.9rem}th{background:#eee;padding:8px;text-align:left;border:1px solid #ccc}td{padding:8px;border:1px solid #ccc}td strong{font-weight:700}.cr{color:#d32f2f;font-weight:700}</style></head><body>');
+  w.document.write('<h2>Scenario Comparison Report</h2>');
+  w.document.write(el.querySelector('table').outerHTML);
+  w.document.write('</body></html>');
+  w.document.close();w.print();
+}
+
+function exportScenarioXlsx(){
+  if(!window._scenarioTableData||window._scenarioTableData.length===0){alert('Run scenarios first.');return;}
+  var wb=XLSX.utils.book_new();
+  var data=[window._scenarioHeaders].concat(window._scenarioTableData);
+  var ws=XLSX.utils.aoa_to_sheet(data);
+  var colW=[];for(var i=0;i<window._scenarioHeaders.length;i++)colW.push({wch:i===0?28:22});
+  ws['!cols']=colW;
+  XLSX.utils.book_append_sheet(wb,ws,'Scenario Summary');
+  XLSX.writeFile(wb,'scenario-comparison.xlsx');
 }
 
 document.addEventListener('DOMContentLoaded',function(){
@@ -890,5 +932,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnScenarioExport').addEventListener('click',exportScenarioTemplate);
   document.getElementById('btnScenarioImport').addEventListener('click',function(){document.getElementById('scenarioFileInput').click();});
   document.getElementById('scenarioFileInput').addEventListener('change',function(e){if(e.target.files[0])importScenarioFile(e.target.files[0]);e.target.value='';});
+  document.getElementById('btnScenarioPrint').addEventListener('click',printScenarioReport);
+  document.getElementById('btnScenarioXlsx').addEventListener('click',exportScenarioXlsx);
 });
 </script></body></html>
