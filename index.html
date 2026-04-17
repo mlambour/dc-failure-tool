@@ -111,7 +111,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <button class="btn bp bsm" id="btnGenRows">Generate Rows</button>
 <button class="btn bs bsm" id="btnUniform">Reset to Uniform</button>
 </div>
-<div class="sx" id="rowSection" class="hidden"><table class="et"><thead><tr><th>Row</th><th>Load (kW)</th></tr></thead><tbody id="rowBody"></tbody></table></div>
+<div class="sx" id="rowSection" class="hidden"><table class="et"><thead><tr><th>Row</th><th>Load (kW)</th><th>Racks</th></tr></thead><tbody id="rowBody"></tbody></table></div>
 <div id="rowTotal" class="nt" style="margin-top:8px"></div>
 </div>
 
@@ -185,6 +185,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </ul>
 </details>
 </div>
+<div class="cd"><h2>📊 Row-Level Normal Distribution</h2><p class="nt">IT load contribution from each row to each string under normal operation (rack-based physical split).</p><div class="sx"><table><thead id="rowDistHead"></thead><tbody id="rowDistBody"></tbody></table></div></div>
 <div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead id="normalHead"><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
@@ -197,7 +198,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 </div>
 <script>
-var SL='ABCDEFGHIJ',rowLoads=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
+var SL='ABCDEFGHIJ',rowLoads=[],rowRacks=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
 var MODES={dual:'Dual: 2 busbars per row (50/50). On failure, survivor takes 100%.',triple:'Triple: 2 active (50/50) + 1 catcher (0%). On failure, catcher picks up lost 50%.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: 2 pairs (A/B+C/D) at 25% each + catcher at 0%. On failure, catcher absorbs the lost 25%. Active strings stay at 25%.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
@@ -217,6 +218,8 @@ function genRows(){
   var oldLoads=rowLoads.slice();
   if(oldLoads.length===nRows){var oldT=0;for(var k=0;k<oldLoads.length;k++)oldT+=oldLoads[k];if(Math.abs(oldT-itKW)<0.5){rowLoads=oldLoads;}else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}}
   else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}
+  var oldRacks=rowRacks.slice();rowRacks=[];
+  for(var i=0;i<nRows;i++)rowRacks.push(oldRacks[i]||22);
   var oldO=otherData.slice();otherData=[];
   for(var i=0;i<nStrings;i++){if(oldO[i])otherData.push({mech:oldO[i].mech,pumps:oldO[i].pumps,misc:oldO[i].misc});else otherData.push({mech:450,pumps:22,misc:400});}
   var strings=gs();
@@ -233,16 +236,16 @@ function genRows(){
 }
 function renderRowLoads(){
   var tb=document.getElementById('rowBody');var html='';var total=0;
-  for(var i=0;i<rowLoads.length;i++){total+=rowLoads[i];html+='<tr><td>'+(i+1)+'</td><td><input type="number" data-ri="'+i+'" value="'+rowLoads[i]+'" step="1" min="0"></td></tr>';}
+  for(var i=0;i<rowLoads.length;i++){total+=rowLoads[i];html+='<tr><td>'+(i+1)+'</td><td><input type="number" data-ri="'+i+'" data-f="load" value="'+rowLoads[i]+'" step="1" min="0"></td><td><input type="number" data-ri="'+i+'" data-f="racks" value="'+(rowRacks[i]||22)+'" step="1" min="1" style="width:60px"></td></tr>';}
   tb.innerHTML=html;
   document.getElementById('rowTotal').textContent='Total: '+fmt(total)+' kW ('+fmtD(total/1000)+' MW)';
   tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
-    var ri=parseInt(e.target.getAttribute('data-ri'));rowLoads[ri]=parseFloat(e.target.value)||0;
-    var t=0;for(var j=0;j<rowLoads.length;j++)t+=rowLoads[j];
-    document.getElementById('rowTotal').textContent='Total: '+fmt(t)+' kW ('+fmtD(t/1000)+' MW)';
+    var ri=parseInt(e.target.getAttribute('data-ri'));var f=e.target.getAttribute('data-f');
+    if(f==='load'){rowLoads[ri]=parseFloat(e.target.value)||0;var t=0;for(var j=0;j<rowLoads.length;j++)t+=rowLoads[j];document.getElementById('rowTotal').textContent='Total: '+fmt(t)+' kW ('+fmtD(t/1000)+' MW)';}
+    else if(f==='racks'){rowRacks[ri]=parseInt(e.target.value)||22;}
   });});
 }
-function resetUniform(){var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;for(var i=0;i<rowLoads.length;i++)rowLoads[i]=perRow;renderRowLoads();}
+function resetUniform(){var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;for(var i=0;i<rowLoads.length;i++)rowLoads[i]=perRow;for(var i=0;i<rowRacks.length;i++)rowRacks[i]=22;renderRowLoads();}
 function autoAllocate(){
   mode=document.getElementById('distMode').value;
   nStrings=parseInt(document.getElementById('numStrings').value);
@@ -335,12 +338,37 @@ function recalcBalance(){
   var strings=gs();var sLoad={};for(var i=0;i<strings.length;i++)sLoad[strings[i]]=0;
   recalcBalanceFromData(sLoad);showBalance(sLoad);
 }
+function splitRacks(totalRacks,count,rowIdx){
+  if(count<=0)return [];
+  var base=Math.floor(totalRacks/count),rem=totalRacks%count;
+  var arr=[];for(var i=0;i<count;i++)arr.push(base);
+  for(var i=0;i<rem;i++)arr[(rowIdx+i)%count]++;
+  return arr;
+}
+function rackSplitForRow(rowIdx,r){
+  var racks=rowRacks[rowIdx]||22;
+  var kWperRack=r.load/racks;
+  var result={};
+  if(mode==='dual'){
+    var halves=splitRacks(racks,2,rowIdx);
+    result[r.a]=halves[0]*kWperRack;result[r.b]=halves[1]*kWperRack;
+  }else if(mode==='triple'){
+    var halves=splitRacks(racks,2,rowIdx);
+    result[r.a]=halves[0]*kWperRack;result[r.b]=halves[1]*kWperRack;
+  }else{
+    var halves=splitRacks(racks,2,rowIdx);
+    var leftPair=splitRacks(halves[0],2,rowIdx);
+    var rightPair=splitRacks(halves[1],2,rowIdx+1);
+    result[r.a]=leftPair[0]*kWperRack;result[r.b]=leftPair[1]*kWperRack;
+    result[r.c]=rightPair[0]*kWperRack;result[r.d]=rightPair[1]*kWperRack;
+  }
+  return result;
+}
 function recalcBalanceFromData(sLoad){
   for(var i=0;i<allocData.length;i++){
     var r=allocData[i];
-    if(mode==='dual'){sLoad[r.a]+=r.load/2;sLoad[r.b]+=r.load/2;}
-    else if(mode==='triple'){sLoad[r.a]+=r.load/2;sLoad[r.b]+=r.load/2;}
-    else{sLoad[r.a]+=r.load/4;sLoad[r.b]+=r.load/4;sLoad[r.c]+=r.load/4;sLoad[r.d]+=r.load/4;}
+    var rs=rackSplitForRow(i,r);
+    for(var k in rs)if(sLoad[k]!==undefined)sLoad[k]+=rs[k];
   }
 }
 function showBalance(sLoad){
@@ -411,24 +439,29 @@ function calcIT(failString){
   var strings=gs();var load={};for(var i=0;i<strings.length;i++)load[strings[i]]=0;
   for(var i=0;i<allocData.length;i++){
     var r=allocData[i];
+    var rs=rackSplitForRow(i,r);
     if(mode==='dual'){
       if(failString&&r.a===failString)load[r.b]+=r.load;
       else if(failString&&r.b===failString)load[r.a]+=r.load;
-      else{load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
+      else{load[r.a]+=rs[r.a];load[r.b]+=rs[r.b];}
     }else if(mode==='triple'){
-      if(failString&&r.a===failString){load[r.b]+=r.load/2;load[r.c]+=r.load/2;}
-      else if(failString&&r.b===failString){load[r.a]+=r.load/2;load[r.c]+=r.load/2;}
-      else if(failString&&r.c===failString){load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
-      else{load[r.a]+=r.load/2;load[r.b]+=r.load/2;}
+      if(failString&&r.a===failString){load[r.b]+=(rs[r.b]||0);load[r.c]+=(rs[r.a]||0);}
+      else if(failString&&r.b===failString){load[r.a]+=(rs[r.a]||0);load[r.c]+=(rs[r.b]||0);}
+      else if(failString&&r.c===failString){load[r.a]+=(rs[r.a]||0);load[r.b]+=(rs[r.b]||0);}
+      else{load[r.a]+=(rs[r.a]||0);load[r.b]+=(rs[r.b]||0);}
     }else if(mode==='quad'){
-      var ab=r.load/2,cd=r.load/2;
-      if(failString===r.a)load[r.b]+=ab;else if(failString===r.b)load[r.a]+=ab;else{load[r.a]+=ab/2;load[r.b]+=ab/2;}
-      if(failString===r.c)load[r.d]+=cd;else if(failString===r.d)load[r.c]+=cd;else{load[r.c]+=cd/2;load[r.d]+=cd/2;}
+      var leftLoad=(rs[r.a]||0)+(rs[r.b]||0),rightLoad=(rs[r.c]||0)+(rs[r.d]||0);
+      if(failString===r.a)load[r.b]+=leftLoad;else if(failString===r.b)load[r.a]+=leftLoad;else{load[r.a]+=(rs[r.a]||0);load[r.b]+=(rs[r.b]||0);}
+      if(failString===r.c)load[r.d]+=rightLoad;else if(failString===r.d)load[r.c]+=rightLoad;else{load[r.c]+=(rs[r.c]||0);load[r.d]+=(rs[r.d]||0);}
     }else{
-      var q=r.load/4;var actives=[r.a,r.b,r.c,r.d],catcher=r.e;
-      if(failString===catcher){for(var z=0;z<actives.length;z++)load[actives[z]]+=q;}
-      else if(actives.indexOf(failString)>=0){load[catcher]+=q;for(var z=0;z<actives.length;z++)if(actives[z]!==failString)load[actives[z]]+=q;}
-      else{for(var z=0;z<actives.length;z++)load[actives[z]]+=q;}
+      var actives=[r.a,r.b,r.c,r.d],catcher=r.e;
+      if(failString===catcher){for(var z=0;z<actives.length;z++)load[actives[z]]+=(rs[actives[z]]||0);}
+      else if(actives.indexOf(failString)>=0){
+        var failedLoad=rs[failString]||0;
+        load[catcher]+=failedLoad;
+        for(var z=0;z<actives.length;z++)if(actives[z]!==failString)load[actives[z]]+=(rs[actives[z]]||0);
+      }
+      else{for(var z=0;z<actives.length;z++)load[actives[z]]+=(rs[actives[z]]||0);}
     }
   }
   if(failString)delete load[failString];return load;
@@ -463,6 +496,17 @@ function calculate(){
     else nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
   }
   nb.innerHTML=nhtml;
+
+  var rdh=document.getElementById('rowDistHead'),rdb=document.getElementById('rowDistBody');
+  var rdHtml='<tr><th>Row</th><th>Load (kW)</th><th>Racks</th>';for(var i=0;i<strings.length;i++)rdHtml+='<th>'+strings[i]+' (kW)</th>';rdHtml+='</tr>';
+  rdh.innerHTML=rdHtml;var rdBody='';
+  for(var ri=0;ri<allocData.length;ri++){
+    var rr=allocData[ri],rs=rackSplitForRow(ri,rr);
+    rdBody+='<tr><td>'+(ri+1)+'</td><td class="v">'+fmt(rr.load)+'</td><td>'+(rowRacks[ri]||22)+'</td>';
+    for(var si=0;si<strings.length;si++){var sv=rs[strings[si]]||0;rdBody+='<td>'+(sv>0?fmt(sv):'—')+'</td>';}
+    rdBody+='</tr>';
+  }
+  rdb.innerHTML=rdBody;
 
   var mh=document.getElementById('matrixHead');var mb=document.getElementById('matrixBody');
   var mechMh=document.getElementById('mechMatrixHead');var mechMb=document.getElementById('mechMatrixBody');
@@ -588,7 +632,7 @@ function exportXML(){
   var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','pf','infraLoss','txRatings','upsMode'];
   for(var i=0;i<ids.length;i++)x+='    <'+ids[i]+'>'+document.getElementById(ids[i]).value+'</'+ids[i]+'>\n';
   x+='    <distMode>'+mode+'</distMode>\n  </params>\n  <rows>\n';
-  for(var i=0;i<allocData.length;i++){var r=allocData[i];x+='    <row num="'+(i+1)+'" load="'+r.load+'" a="'+r.a+'" b="'+r.b+'"'+(r.c?' c="'+r.c+'"':'')+(r.d?' d="'+r.d+'"':'')+(r.e?' e="'+r.e+'"':'')+'/>\n';}
+  for(var i=0;i<allocData.length;i++){var r=allocData[i];x+='    <row num="'+(i+1)+'" load="'+r.load+'" racks="'+(rowRacks[i]||22)+'" a="'+r.a+'" b="'+r.b+'"'+(r.c?' c="'+r.c+'"':'')+(r.d?' d="'+r.d+'"':'')+(r.e?' e="'+r.e+'"':'')+'/>\n';}
   x+='  </rows>\n  <fanWalls>\n';
   for(var f=0;f<fanWallData.length;f++){var fw=fanWallData[f];x+='    <fanWall num="'+(f+1)+'" load="'+fw.load+'" primary="'+fw.primary+'" secondary="'+fw.secondary+'"/>\n';}
   x+='  </fanWalls>\n  <otherLoads>\n';var strings=gs();
@@ -613,8 +657,8 @@ function exportCSV(){
   addCsvSection(lines,'System Parameters',[
     ['Parameter','Value'],['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],['Power Strings',document.getElementById('numStrings').value],['Rack Rows',document.getElementById('numRows').value],['Fan Wall Units',document.getElementById('numFanWalls').value],['Distribution Mode',mode],['UPS Configuration',document.getElementById('upsMode').value],['UPS Charging %',document.getElementById('upsCharge').value],['UPS Losses %',document.getElementById('upsLoss').value],['Power Factor',document.getElementById('pf').value],['Distribution Loss %',document.getElementById('infraLoss').value],['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
   ]);
-  var rowHdr=['Row','Load (kW)'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
-  var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
+  var rowHdr=['Row','Load (kW)','Racks'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
+  var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,rowRacks[r]||22,allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
   var otherRows=[['String','Chiller Electrical Load (kW)','Misc (kW)','Total (kW)']];for(var j=0;j<strings.length;j++){var od=otherData[j]||{mech:0,pumps:0,misc:0};otherRows.push([strings[j],od.mech,od.misc,od.mech+od.misc]);}addCsvSection(lines,'Other Loads',otherRows);
   var fanWallRows=[['Unit','Load (kW)','Primary String','Secondary String']];for(var fw=0;fw<fanWallData.length;fw++)fanWallRows.push(['FW-'+(fw+1),fanWallData[fw].load,fanWallData[fw].primary,fanWallData[fw].secondary]);addCsvSection(lines,'Fan Wall Units',fanWallRows);
   var mechUpsRows=[['String','Other Mech UPS Load (kW)']];for(var mj=0;mj<strings.length;mj++){var mod=otherData[mj]||{mech:0,pumps:0,misc:0};mechUpsRows.push([strings[mj],mod.pumps]);}addCsvSection(lines,'Mech UPS Loads',mechUpsRows);
@@ -652,7 +696,8 @@ function importXML(file){
       mode=gv('distMode')||'dual';document.getElementById('distMode').value=mode;document.getElementById('modeDesc').textContent=MODES[mode];}
     nStrings=parseInt(document.getElementById('numStrings').value);nRows=parseInt(document.getElementById('numRows').value);
     var rows=doc.querySelectorAll('rows row');rowLoads=[];allocData=[];
-    for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''});}
+    rowRacks=[];
+    for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);rowRacks.push(parseInt(r.getAttribute('racks'))||22);allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''});}
     var fwRows=doc.querySelectorAll('fanWalls fanWall');fanWallData=[];
     for(var f=0;f<fwRows.length;f++){var fw=fwRows[f];fanWallData.push({load:parseFloat(fw.getAttribute('load'))||6.03,primary:fw.getAttribute('primary')||'A',secondary:fw.getAttribute('secondary')||'B'});}    
     if(fwRows.length===0){
