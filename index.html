@@ -503,7 +503,8 @@ function calculate(){
   for(var ri=0;ri<allocData.length;ri++){
     var rr=allocData[ri],rs=rackSplitForRow(ri,rr);
     rdBody+='<tr><td>'+(ri+1)+'</td><td class="v">'+fmt(rr.load)+'</td><td>'+(rowRacks[ri]||22)+'</td>';
-    for(var si=0;si<strings.length;si++){var sv=rs[strings[si]]||0;rdBody+='<td>'+(sv>0?fmt(sv):'—')+'</td>';}
+    var catcherStr='';if(mode==='triple')catcherStr=rr.c;else if(mode==='quint')catcherStr=rr.e;
+    for(var si=0;si<strings.length;si++){var sv=rs[strings[si]]||0;if(sv>0)rdBody+='<td>'+fmt(sv)+'</td>';else if(strings[si]===catcherStr)rdBody+='<td style="color:#555">— <span style="font-size:0.75rem;color:var(--text2)">(Catcher)</span></td>';else rdBody+='<td style="color:#555">—</td>';}
     rdBody+='</tr>';
   }
   rdb.innerHTML=rdBody;
