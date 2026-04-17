@@ -71,6 +71,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 @media print{body{background:#fff;color:#000;padding:10px}.cd{border:1px solid #ccc;background:#fff;break-inside:avoid}th{background:#eee;color:#333}.v{color:#0077b6}h1{-webkit-text-fill-color:#0077b6}.br,.nt{display:none}.sumc{background:#fff;border:1px solid #ccc}.hero{border:1px solid #ccc}.hero img{max-height:220px}}
 @media(max-width:700px){body{padding:10px}.cd{padding:14px}.fr{flex-direction:column}h1{font-size:1.3rem}.herotx{padding:16px}.hero img{max-height:180px}}
 </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="cnt">
@@ -191,9 +192,26 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
 <div class="cd" id="mechMatrixCard" style="display:none"><h2>🔋 Mech UPS Failure Scenario Matrix</h2><p class="nt">Mech UPS output on each surviving string per failure. Includes Fan Wall transfer plus other mech UPS loads.</p><div class="sx"><table><thead id="mechMatrixHead"></thead><tbody id="mechMatrixBody"></tbody></table></div></div>
 <div class="cd" id="mechSizingCard" style="display:none"><h2>🔋 Mech UPS Failure Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst Mech UPS Output (kW)</th><th>Worst Mech UPS Input (kW)</th><th>Scenario</th></tr></thead><tbody id="mechSizingBody"></tbody></table></div></div>
-<div class="br" style="margin-bottom:30px">
+<div class="br" style="margin-bottom:20px">
 <button class="btn bs" id="btnExportCsv">📊 Export CSV</button>
 <button class="btn bp" id="btnPrint">📄 Print / PDF</button>
+</div>
+</div>
+
+<div class="cd">
+<h2>🔄 Multi-Scenario Comparison</h2>
+<p class="nt">Export a scenario template with current row loads as Scenario 1. Fill in additional scenario loads offline, then import to run all scenarios and compare results.</p>
+<div class="fr">
+<div class="fg"><label>Number of Scenarios</label><input type="number" id="numScenarios" value="3" min="2" max="20"></div>
+</div>
+<div class="br" style="margin-top:10px">
+<button class="btn bp bsm" id="btnScenarioExport">📤 Export Scenario Template (.xlsx)</button>
+<button class="btn bs bsm" id="btnScenarioImport">📥 Import Completed Scenarios (.xlsx)</button>
+<input type="file" id="scenarioFileInput" accept=".xlsx,.xls" style="display:none">
+</div>
+<div id="scenarioResults" style="display:none;margin-top:16px">
+<h3 style="color:var(--accent);margin-bottom:10px">📋 Scenario Comparison Summary</h3>
+<div class="sx"><table><thead id="scenarioHead"></thead><tbody id="scenarioBody"></tbody></table></div>
 </div>
 </div>
 </div>
@@ -715,6 +733,148 @@ function importXML(file){
   }catch(err){alert('Error: '+err.message);}};reader.readAsText(file);
 }
 
+function exportScenarioTemplate(){
+  if(allocData.length===0){alert('Complete Step 1 and Step 2 first, then Calculate.');return;}
+  var nScen=parseInt(document.getElementById('numScenarios').value)||3;
+  var wb=XLSX.utils.book_new();
+  var header=['Row'];for(var s=1;s<=nScen;s++)header.push('Scenario '+s+' (kW)');
+  var data=[header];
+  for(var i=0;i<rowLoads.length;i++){
+    var row=['Row '+(i+1)];
+    row.push(rowLoads[i]);
+    for(var s=1;s<nScen;s++)row.push('');
+    data.push(row);
+  }
+  var ws=XLSX.utils.aoa_to_sheet(data);
+  var colW=[{wch:8}];for(var s=0;s<nScen;s++)colW.push({wch:18});
+  ws['!cols']=colW;
+  XLSX.utils.book_append_sheet(wb,ws,'Scenarios');
+  XLSX.writeFile(wb,'scenario-template.xlsx');
+}
+
+function importScenarioFile(file){
+  if(allocData.length===0){alert('Complete Step 1 and Step 2 first, then Calculate.');return;}
+  var reader=new FileReader();reader.onload=function(e){try{
+    var wb=XLSX.read(e.target.result,{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var data=XLSX.utils.sheet_to_json(ws,{header:1});
+    if(data.length<2){alert('Template appears empty.');return;}
+    var headerRow=data[0];
+    var nScen=headerRow.length-1;
+    if(nScen<1){alert('No scenario columns found.');return;}
+    var scenarioLoads=[];
+    for(var s=0;s<nScen;s++){
+      var loads=[];
+      for(var r=1;r<data.length;r++){
+        var v=parseFloat(data[r][s+1]);
+        if(isNaN(v))continue;
+        loads.push(v);
+      }
+      if(loads.length>0)scenarioLoads.push({name:headerRow[s+1]||('Scenario '+(s+1)),loads:loads});
+    }
+    if(scenarioLoads.length===0){alert('No valid scenario data found.');return;}
+    runMultiScenario(scenarioLoads);
+  }catch(err){alert('Error reading file: '+err.message);}};reader.readAsArrayBuffer(file);
+}
+
+function runMultiScenario(scenarioLoads){
+  var strings=gs();
+  var chg=parseFloat(document.getElementById('upsCharge').value)/100;
+  var loss=parseFloat(document.getElementById('upsLoss').value)/100;
+  var pf=parseFloat(document.getElementById('pf').value);
+  var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
+  var upsMode=document.getElementById('upsMode').value;
+  var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
+  var savedLoads=rowLoads.slice();
+  var savedAlloc=allocData.map(function(r){return {load:r.load,a:r.a,b:r.b,c:r.c,d:r.d,e:r.e};});
+  var results=[];
+  for(var si=0;si<scenarioLoads.length;si++){
+    var sc=scenarioLoads[si];
+    for(var ri=0;ri<sc.loads.length&&ri<rowLoads.length;ri++){rowLoads[ri]=sc.loads[ri];allocData[ri].load=sc.loads[ri];}
+    var scenarios={};scenarios['Normal']=calcIT(null);
+    for(var fi=0;fi<strings.length;fi++)scenarios[strings[fi]+' Fails']=calcIT(strings[fi]);
+    var fanWallScenarios={};fanWallScenarios['Normal']=calcFanWallLoads(null);
+    for(var fsi=0;fsi<strings.length;fsi++)fanWallScenarios[strings[fsi]+' Fails']=calcFanWallLoads(strings[fsi]);
+    var normalIT=scenarios['Normal'];
+    var wPS={};
+    for(var wi=0;wi<strings.length;wi++){
+      var s=strings[wi],best=0,bestS='Normal';
+      var sk=['Normal'];for(var j=0;j<strings.length;j++)sk.push(strings[j]+' Fails');
+      for(var k=0;k<sk.length;k++){
+        if(sk[k]===s+' Fails')continue;
+        var val=scenarios[sk[k]][s]||0;if(val>best){best=val;bestS=sk[k];}
+      }
+      wPS[s]={val:best,scen:bestS};
+    }
+    var mechWorst={};
+    if(upsMode==='separate'){
+      for(var mi=0;mi<strings.length;mi++){
+        var ms=strings[mi],mbest=0,mbestS='Normal';
+        var mkeys=['Normal'];for(var mk=0;mk<strings.length;mk++)mkeys.push(strings[mk]+' Fails');
+        for(var mq=0;mq<mkeys.length;mq++){
+          if(mkeys[mq]===ms+' Fails')continue;
+          var scenFan=(fanWallScenarios[mkeys[mq]]&&fanWallScenarios[mkeys[mq]][ms])||0;
+          var od=otherData[mi]||{mech:0,pumps:0,misc:0};
+          var mval=scenFan+od.pumps;
+          if(mval>mbest){mbest=mval;mbestS=mkeys[mq];}
+        }
+        mechWorst[ms]={val:mbest,scen:mbestS};
+      }
+    }
+    var critUpsOut=0,critUpsIn=0,critGen=0,critTx=0,critScen='',critUpsStr='',critGenStr='';
+    var critMechOut=0,critMechIn=0,critMechScen='',critMechStr='';
+    var totalIT=0;for(var ti=0;ti<rowLoads.length;ti++)totalIT+=rowLoads[ti];
+    for(var zi=0;zi<strings.length;zi++){
+      var s=strings[zi],w=wPS[s],od=otherData[zi]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc);
+      var fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
+      var mechUpsTotal=fanWallLoad+od.pumps;
+      var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val;
+      var upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss);
+      var mechUpsOut=upsMode==='separate'?mechUpsTotal:0;
+      var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
+      var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
+      var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
+      if(ui>critUpsIn){critUpsOut=uo;critUpsIn=ui;critScen=w.scen;critUpsStr=s;}
+      if(gv>critGen){critGen=gv;critTx=txRt;critGenStr=s;}
+      var mw=mechWorst[s]||{val:0,scen:'Normal'};
+      var mwIn=mw.val>0?mw.val*(1+infraL)*(1+chg+loss):0;
+      if(mwIn>critMechIn){critMechOut=mw.val;critMechIn=mwIn;critMechScen=mw.scen;critMechStr=s;}
+    }
+    results.push({name:sc.name,totalIT:totalIT,critScen:critScen,critUpsStr:critUpsStr,critUpsOut:critUpsOut,critUpsIn:critUpsIn,critGenStr:critGenStr,critGen:critGen,critTx:critTx,critMechStr:critMechStr,critMechOut:critMechOut,critMechIn:critMechIn,upsMode:upsMode});
+  }
+  rowLoads=savedLoads;
+  allocData=savedAlloc;
+  var sh=document.getElementById('scenarioHead'),sb=document.getElementById('scenarioBody');
+  var hh='<tr><th>Metric</th>';for(var i=0;i<results.length;i++)hh+='<th>'+results[i].name+'</th>';hh+='</tr>';
+  sh.innerHTML=hh;
+  var metrics=[
+    {label:'Total IT Load (kW)',fn:function(r){return fmt(r.totalIT);}},
+    {label:'Governing Failure',fn:function(r){return r.critScen;}},
+    {label:'Critical UPS String',fn:function(r){return r.critUpsStr;}},
+    {label:'Max UPS Output (kW)',fn:function(r){return fmt(r.critUpsOut);}},
+    {label:'Max UPS Input (kW)',fn:function(r){return fmt(r.critUpsIn);}},
+    {label:'Critical Gen String',fn:function(r){return r.critGenStr;}},
+    {label:'Max Generator (kVA)',fn:function(r){return fmt(r.critGen);}},
+    {label:'Transformer (kVA)',fn:function(r){return r.critTx;}}
+  ];
+  if(results[0]&&results[0].upsMode==='separate'){
+    metrics.splice(5,0,
+      {label:'Critical Mech UPS String',fn:function(r){return r.critMechStr||'\u2014';}},
+      {label:'Max Mech UPS Output (kW)',fn:function(r){return r.critMechOut>0?fmt(r.critMechOut):'\u2014';}},
+      {label:'Max Mech UPS Input (kW)',fn:function(r){return r.critMechIn>0?fmt(r.critMechIn):'\u2014';}}
+    );
+  }
+  var bhtml='';
+  for(var m=0;m<metrics.length;m++){
+    bhtml+='<tr><td><strong>'+metrics[m].label+'</strong></td>';
+    for(var i=0;i<results.length;i++)bhtml+='<td>'+metrics[m].fn(results[i])+'</td>';
+    bhtml+='</tr>';
+  }
+  sb.innerHTML=bhtml;
+  document.getElementById('scenarioResults').style.display='block';
+  document.getElementById('scenarioResults').scrollIntoView({behavior:'smooth'});
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnGenRows').addEventListener('click',genRows);
   document.getElementById('btnUniform').addEventListener('click',resetUniform);
@@ -727,5 +887,8 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnExport').addEventListener('click',exportXML);
   document.getElementById('btnImport').addEventListener('click',function(){document.getElementById('fileInput').click();});
   document.getElementById('fileInput').addEventListener('change',function(e){if(e.target.files[0])importXML(e.target.files[0]);e.target.value='';});
+  document.getElementById('btnScenarioExport').addEventListener('click',exportScenarioTemplate);
+  document.getElementById('btnScenarioImport').addEventListener('click',function(){document.getElementById('scenarioFileInput').click();});
+  document.getElementById('scenarioFileInput').addEventListener('change',function(e){if(e.target.files[0])importScenarioFile(e.target.files[0]);e.target.value='';});
 });
 </script></body></html>
