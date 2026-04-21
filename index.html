@@ -114,7 +114,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <button class="btn bp bsm" id="btnGenRows">Generate Rows</button>
 <button class="btn bs bsm" id="btnUniform">Reset to Uniform</button>
 </div>
-<div class="sx" id="rowSection" class="hidden"><table class="et"><thead><tr><th>Row</th><th>Load (kW)</th><th>Racks</th></tr></thead><tbody id="rowBody"></tbody></table></div>
+<div class="sx" id="rowSection" class="hidden"><table class="et"><thead><tr><th>Row</th><th>Load (kW)</th><th>Racks</th><th>Feed Type</th></tr></thead><tbody id="rowBody"></tbody></table></div>
 <div id="rowTotal" class="nt" style="margin-top:8px"></div>
 </div>
 
@@ -222,7 +222,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 </div>
 <script>
-var SL='ABCDEFGHIJ',rowLoads=[],rowRacks=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
+var SL='ABCDEFGHIJ',rowLoads=[],rowRacks=[],rowFeedType=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
 var MODES={dual:'Dual: all racks are dual-connected A/B at 50/50. On failure, survivor takes 100%.',triple:'Triple: first rack half is A/C, second rack half is B/C, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected half.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: rack groups are dual-connected A/E, B/E, C/E and D/E, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected group.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
@@ -243,7 +243,8 @@ function genRows(){
   if(oldLoads.length===nRows){var oldT=0;for(var k=0;k<oldLoads.length;k++)oldT+=oldLoads[k];if(Math.abs(oldT-itKW)<0.5){rowLoads=oldLoads;}else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}}
   else{rowLoads=[];for(var i=0;i<nRows;i++)rowLoads.push(perRow);}
   var oldRacks=rowRacks.slice();rowRacks=[];
-  for(var i=0;i<nRows;i++)rowRacks.push(oldRacks[i]||22);
+  var oldFeed=rowFeedType.slice();rowFeedType=[];
+  for(var i=0;i<nRows;i++){rowRacks.push(oldRacks[i]||22);rowFeedType.push(oldFeed[i]||'dual');}
   var oldO=otherData.slice();otherData=[];
   for(var i=0;i<nStrings;i++){if(oldO[i])otherData.push({mech:oldO[i].mech,pumps:oldO[i].pumps,misc:oldO[i].misc});else otherData.push({mech:450,pumps:22,misc:400});}
   var strings=gs();
@@ -260,16 +261,17 @@ function genRows(){
 }
 function renderRowLoads(){
   var tb=document.getElementById('rowBody');var html='';var total=0;
-  for(var i=0;i<rowLoads.length;i++){total+=rowLoads[i];html+='<tr><td>'+(i+1)+'</td><td><input type="number" data-ri="'+i+'" data-f="load" value="'+rowLoads[i]+'" step="1" min="0"></td><td><input type="number" data-ri="'+i+'" data-f="racks" value="'+(rowRacks[i]||22)+'" step="1" min="1" style="width:60px"></td></tr>';}
+  for(var i=0;i<rowLoads.length;i++){total+=rowLoads[i];html+='<tr><td>'+(i+1)+'</td><td><input type="number" data-ri="'+i+'" data-f="load" value="'+rowLoads[i]+'" step="1" min="0"></td><td><input type="number" data-ri="'+i+'" data-f="racks" value="'+(rowRacks[i]||22)+'" step="1" min="1" style="width:60px"></td><td><select data-ri="'+i+'" data-f="feed"><option value="dual"'+(rowFeedType[i]==='quad'?'':' selected')+'>Dual</option><option value="quad"'+(rowFeedType[i]==='quad'?' selected':'')+'>Quad</option></select></td></tr>';}
   tb.innerHTML=html;
   document.getElementById('rowTotal').textContent='Total: '+fmt(total)+' kW ('+fmtD(total/1000)+' MW)';
   tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
     var ri=parseInt(e.target.getAttribute('data-ri'));var f=e.target.getAttribute('data-f');
     if(f==='load'){rowLoads[ri]=parseFloat(e.target.value)||0;var t=0;for(var j=0;j<rowLoads.length;j++)t+=rowLoads[j];document.getElementById('rowTotal').textContent='Total: '+fmt(t)+' kW ('+fmtD(t/1000)+' MW)';}
     else if(f==='racks'){rowRacks[ri]=parseInt(e.target.value)||22;}
+    else if(f==='feed'){rowFeedType[ri]=e.target.value||'dual';}
   });});
 }
-function resetUniform(){var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;for(var i=0;i<rowLoads.length;i++)rowLoads[i]=perRow;for(var i=0;i<rowRacks.length;i++)rowRacks[i]=22;renderRowLoads();}
+function resetUniform(){var itKW=getITkW();var perRow=Math.round(itKW/nRows*10)/10;for(var i=0;i<rowLoads.length;i++)rowLoads[i]=perRow;for(var i=0;i<rowRacks.length;i++){rowRacks[i]=22;rowFeedType[i]='dual';}renderRowLoads();}
 function autoAllocate(){
   mode=document.getElementById('distMode').value;
   nStrings=parseInt(document.getElementById('numStrings').value);
@@ -539,11 +541,11 @@ function calculate(){
   nb.innerHTML=nhtml;
 
   var rdh=document.getElementById('rowDistHead'),rdb=document.getElementById('rowDistBody');
-  var rdHtml='<tr><th>Row</th><th>Load (kW)</th><th>Racks</th>';for(var i=0;i<strings.length;i++)rdHtml+='<th>'+strings[i]+' (kW)</th>';rdHtml+='</tr>';
+  var rdHtml='<tr><th>Row</th><th>Load (kW)</th><th>Racks</th><th>Feed</th>';for(var i=0;i<strings.length;i++)rdHtml+='<th>'+strings[i]+' (kW)</th>';rdHtml+='</tr>';
   rdh.innerHTML=rdHtml;var rdBody='';
   for(var ri=0;ri<allocData.length;ri++){
     var rr=allocData[ri],rs=rackSplitForRow(ri,rr);
-    rdBody+='<tr><td>'+(ri+1)+'</td><td class="v">'+fmt(rr.load)+'</td><td>'+(rowRacks[ri]||22)+'</td>';
+    rdBody+='<tr><td>'+(ri+1)+'</td><td class="v">'+fmt(rr.load)+'</td><td>'+(rowRacks[ri]||22)+'</td><td>'+(rowFeedType[ri]||'dual').charAt(0).toUpperCase()+(rowFeedType[ri]||'dual').slice(1)+'</td>';
     var catcherStr='';if(mode==='triple')catcherStr=rr.c;else if(mode==='quint')catcherStr=rr.e;
     for(var si=0;si<strings.length;si++){var sv=rs[strings[si]]||0;if(sv>0)rdBody+='<td>'+fmt(sv)+'</td>';else if(strings[si]===catcherStr)rdBody+='<td style="color:#555">— <span style="font-size:0.75rem;color:var(--text2)">(Catcher)</span></td>';else rdBody+='<td style="color:#555">—</td>';}
     rdBody+='</tr>';
@@ -677,7 +679,7 @@ function exportXML(){
   var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','genPf','infraLoss','txRatings','upsMode','upsPf','txPf'];
   for(var i=0;i<ids.length;i++)x+='    <'+ids[i]+'>'+document.getElementById(ids[i]).value+'</'+ids[i]+'>\n';
   x+='    <distMode>'+mode+'</distMode>\n  </params>\n  <rows>\n';
-  for(var i=0;i<allocData.length;i++){var r=allocData[i];x+='    <row num="'+(i+1)+'" load="'+r.load+'" racks="'+(rowRacks[i]||22)+'" a="'+r.a+'" b="'+r.b+'"'+(r.c?' c="'+r.c+'"':'')+(r.d?' d="'+r.d+'"':'')+(r.e?' e="'+r.e+'"':'')+'/>\n';}
+  for(var i=0;i<allocData.length;i++){var r=allocData[i];x+='    <row num="'+(i+1)+'" load="'+r.load+'" racks="'+(rowRacks[i]||22)+'" feed="'+(rowFeedType[i]||'dual')+'" a="'+r.a+'" b="'+r.b+'"'+(r.c?' c="'+r.c+'"':'')+(r.d?' d="'+r.d+'"':'')+(r.e?' e="'+r.e+'"':'')+'/>\n';}
   x+='  </rows>\n  <fanWalls>\n';
   for(var f=0;f<fanWallData.length;f++){var fw=fanWallData[f];x+='    <fanWall num="'+(f+1)+'" load="'+fw.load+'" primary="'+fw.primary+'" secondary="'+fw.secondary+'"/>\n';}
   x+='  </fanWalls>\n  <otherLoads>\n';var strings=gs();
@@ -704,8 +706,8 @@ function exportCSV(){
   addCsvSection(lines,'System Parameters',[
     ['Parameter','Value'],['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],['Power Strings',document.getElementById('numStrings').value],['Rack Rows',document.getElementById('numRows').value],['Fan Wall Units',document.getElementById('numFanWalls').value],['Distribution Mode',mode],['UPS Configuration',document.getElementById('upsMode').value],['UPS Charging %',document.getElementById('upsCharge').value],['UPS Losses %',document.getElementById('upsLoss').value],['Generator Power Factor',document.getElementById('genPf').value],['UPS Power Factor',document.getElementById('upsPf').value],['Transformer Power Factor',document.getElementById('txPf').value],['Distribution Loss %',document.getElementById('infraLoss').value],['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
   ]);
-  var rowHdr=['Row','Load (kW)','Racks'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
-  var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,rowRacks[r]||22,allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
+  var rowHdr=['Row','Load (kW)','Racks','Feed Type'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
+  var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,rowRacks[r]||22,(rowFeedType[r]||'dual').charAt(0).toUpperCase()+(rowFeedType[r]||'dual').slice(1),allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
   var otherRows=[['String','Chiller Electrical Load (kW)','Misc (kW)','Total (kW)']];for(var j=0;j<strings.length;j++){var od=otherData[j]||{mech:0,pumps:0,misc:0};otherRows.push([strings[j],od.mech,od.misc,od.mech+od.misc]);}addCsvSection(lines,'Other Loads',otherRows);
   var fanWallRows=[['Unit','Load (kW)','Primary String','Secondary String']];for(var fw=0;fw<fanWallData.length;fw++)fanWallRows.push(['FW-'+(fw+1),fanWallData[fw].load,fanWallData[fw].primary,fanWallData[fw].secondary]);addCsvSection(lines,'Fan Wall Units',fanWallRows);
   var mechUpsRows=[['String','Other Mech UPS Load (kW)']];for(var mj=0;mj<strings.length;mj++){var mod=otherData[mj]||{mech:0,pumps:0,misc:0};mechUpsRows.push([strings[mj],mod.pumps]);}addCsvSection(lines,'Mech UPS Loads',mechUpsRows);
@@ -743,8 +745,8 @@ function importXML(file){
       mode=gv('distMode')||'dual';document.getElementById('distMode').value=mode;document.getElementById('modeDesc').textContent=MODES[mode];}
     nStrings=parseInt(document.getElementById('numStrings').value);nRows=parseInt(document.getElementById('numRows').value);
     var rows=doc.querySelectorAll('rows row');rowLoads=[];allocData=[];
-    rowRacks=[];
-    for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);rowRacks.push(parseInt(r.getAttribute('racks'))||22);allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''});}
+    rowRacks=[];rowFeedType=[];
+    for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);rowRacks.push(parseInt(r.getAttribute('racks'))||22);rowFeedType.push(r.getAttribute('feed')||'dual');allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''});}
     var fwRows=doc.querySelectorAll('fanWalls fanWall');fanWallData=[];
     for(var f=0;f<fwRows.length;f++){var fw=fwRows[f];fanWallData.push({load:parseFloat(fw.getAttribute('load'))||6.03,primary:fw.getAttribute('primary')||'A',secondary:fw.getAttribute('secondary')||'B'});}    
     if(fwRows.length===0){
