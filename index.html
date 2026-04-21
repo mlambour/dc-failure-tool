@@ -81,6 +81,14 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 
 <div class="cd">
+<h2>🏗️ Topology</h2>
+<div class="fr">
+<div class="fg" style="min-width:400px"><label>String Topology</label><select id="topology"><option value="combined">Combined IT + Mechanical Strings</option><option value="separated">Separated IT + Mechanical Strings</option></select></div>
+</div>
+<div id="topoDesc" class="md">Combined: IT and mechanical loads share the same power strings. This is the existing sizing methodology.</div>
+</div>
+
+<div class="cd">
 <h2>📊 System Parameters</h2>
 <div class="fr">
 <div class="fg"><label>IT Load</label><div style="display:flex;gap:6px"><input type="number" id="itLoad" value="5" step="0.1" min="0.01" style="flex:1"><select id="loadUnit" style="width:70px"><option value="MW">MW</option><option value="kW">kW</option></select></div></div>
@@ -134,23 +142,55 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 </div>
 
-<div class="cd">
+<div class="cd itMechSection">
 <h2>🔧 Other Loads Per String (Non-IT, fixed)</h2>
 <p class="nt">Mechanical and other fixed loads per string. Do NOT redistribute on failure.</p>
 <div class="sxl"><table class="et"><thead><tr><th>String</th><th>Chiller Electrical Load (kW)</th><th>Misc (kW)</th><th>Total</th></tr></thead><tbody id="otherBody"></tbody></table></div>
 </div>
 
-<div class="cd">
+<div class="cd itMechSection">
 <h2>🌀 Fan Wall Units</h2>
 <p class="nt">Fan wall units are structured mech UPS loads. In normal operation, the full unit load sits on the primary string. On primary string failure, the full load transfers to the secondary string.</p>
 <div class="sx"><table class="et"><thead><tr><th>Unit</th><th>Load (kW)</th><th>Primary String</th><th>Secondary String</th></tr></thead><tbody id="fanWallBody"></tbody></table></div>
 <div id="fanWallSummary" class="bal"></div>
 </div>
 
-<div class="cd">
+<div class="cd itMechSection">
 <h2>🔋 Mech UPS Loads Per String</h2>
 <p class="nt">Other dedicated mechanical UPS output loads per string, separate from fan wall units.</p>
 <div class="sxl"><table class="et"><thead><tr><th>String</th><th>Other Mech UPS Load (kW)</th></tr></thead><tbody id="mechUpsBody"></tbody></table></div>
+</div>
+
+<div id="mechTopologyBlock" style="display:none">
+<div class="cd" style="border:2px solid var(--accent);background:#0f172a">
+<h2>⚙️ Mechanical Topology (Separated)</h2>
+<p class="nt">Mechanical strings are independent from IT strings. Labels prefixed with <strong>M-</strong>. Power factors and distribution loss are shared with the IT calculation.</p>
+<div class="fr">
+<div class="fg"><label>Mech Power Strings</label><input type="number" id="mechNumStrings" value="3" min="2" max="10"></div>
+<div class="fg"><label>Mech Distribution Mode</label><select id="mechDistMode"><option value="dual">Dual (A/B)</option><option value="triple" selected>Triple (A/B + Catcher)</option><option value="quad">Quad (A/B + C/D)</option><option value="quint">Quint (A/B + C/D + Catcher)</option><option value="hex">Hex (A/B + C/D + Dual Catcher)</option></select></div>
+<div class="fg"><label>Mech Fan Wall Units</label><input type="number" id="mechNumFanWalls" value="10" min="0" max="100"></div>
+</div>
+<div id="mechModeDesc" class="md">Triple: Two rack halves, each dual-connected to an active string and the common catcher.</div>
+</div>
+
+<div class="cd">
+<h2>⚙️ Mech Other Loads Per String</h2>
+<p class="nt">Per-string chiller / misc loads. The <strong>ATS Backup String</strong> transfers both the chiller and the Mech UPS load of this string to the nominated backup on failure. Misc loads drop out.</p>
+<div class="sxl"><table class="et"><thead><tr><th>Mech String</th><th>Chiller Electrical Load (kW)</th><th>Misc (kW)</th><th>ATS Backup String</th><th>Total</th></tr></thead><tbody id="mechOtherBody"></tbody></table></div>
+</div>
+
+<div class="cd">
+<h2>⚙️ Mech Fan Wall Units</h2>
+<p class="nt">Fan wall units across the Mech strings. Primary string failure transfers the unit load to its secondary.</p>
+<div class="sx"><table class="et"><thead><tr><th>Unit</th><th>Load (kW)</th><th>Primary Mech String</th><th>Secondary Mech String</th></tr></thead><tbody id="mechFanWallBody"></tbody></table></div>
+<div id="mechFanWallSummary" class="bal"></div>
+</div>
+
+<div class="cd">
+<h2>⚙️ Mech UPS Loads Per String</h2>
+<p class="nt">Dedicated Mech UPS output loads per Mech string. On Mech string failure these transfer using the same ATS backup as the chiller above.</p>
+<div class="sxl"><table class="et"><thead><tr><th>Mech String</th><th>Other Mech UPS Load (kW)</th><th>ATS Backup (from Other Loads)</th></tr></thead><tbody id="mechUpsLoadsBody"></tbody></table></div>
+</div>
 </div>
 
 <div class="br"><button class="btn bp" id="btnCalc">Calculate Failure Scenarios</button></div>
@@ -225,6 +265,11 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 <script>
 var SL='ABCDEFGHIJ',rowLoads=[],rowRacks=[],rowFeedType=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
+var topology='combined';
+// Mechanical parallel topology state (used only when topology==='separated')
+var mechNStrings=3,mechMode='triple';
+var mechOtherData=[],mechFanWallData=[];
+function mgs(){return SL.slice(0,mechNStrings).split('').map(function(s){return 'M-'+s;});}
 var MODES={dual:'Dual: all racks are dual-connected A/B at 50/50. On failure, survivor takes 100%.',triple:'Triple: first rack half is A/C, second rack half is B/C, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected half.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: rack groups are dual-connected A/E, B/E, C/E and D/E, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected group.',hex:'Hex: 6 strings with dual catchers (E/F). Quad-fed only. Left half A/B/E/F, right half C/D/E/F, each at 25%. On failure, surviving 3 feeds take 33.3% each.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
@@ -758,7 +803,7 @@ function calculate(){
 }
 function exportXML(){
   if(allocData.length===0){alert('Generate and allocate first.');return;}
-  var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool>\n  <params>\n';
+  var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool topology="'+topology+'">\n  <params>\n';
   var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','genPf','infraLoss','txRatings','upsMode','upsPf','txPf'];
   for(var i=0;i<ids.length;i++)x+='    <'+ids[i]+'>'+document.getElementById(ids[i]).value+'</'+ids[i]+'>\n';
   x+='    <distMode>'+mode+'</distMode>\n  </params>\n  <rows>\n';
@@ -767,7 +812,17 @@ function exportXML(){
   for(var f=0;f<fanWallData.length;f++){var fw=fanWallData[f];x+='    <fanWall num="'+(f+1)+'" load="'+fw.load+'" primary="'+fw.primary+'" secondary="'+fw.secondary+'"/>\n';}
   x+='  </fanWalls>\n  <otherLoads>\n';var strings=gs();
   for(var i=0;i<otherData.length;i++){var o=otherData[i];x+='    <string id="'+strings[i]+'" mech="'+o.mech+'" pumps="'+o.pumps+'" misc="'+o.misc+'"/>\n';}
-  x+='  </otherLoads>\n</DCFailureTool>';
+  x+='  </otherLoads>\n';
+  if(topology==='separated'){
+    x+='  <mech nStrings="'+mechNStrings+'" distMode="'+mechMode+'" numFanWalls="'+mechFanWallData.length+'">\n';
+    var mstrs=mgs();
+    x+='    <otherLoads>\n';
+    for(var mi=0;mi<mechOtherData.length;mi++){var mo=mechOtherData[mi];x+='      <string id="'+mstrs[mi]+'" chiller="'+mo.chiller+'" misc="'+mo.misc+'" mechUps="'+mo.mechUps+'" atsBackup="'+mo.atsBackup+'"/>\n';}
+    x+='    </otherLoads>\n    <fanWalls>\n';
+    for(var mf=0;mf<mechFanWallData.length;mf++){var mfw=mechFanWallData[mf];x+='      <fanWall num="'+(mf+1)+'" load="'+mfw.load+'" primary="'+mfw.primary+'" secondary="'+mfw.secondary+'"/>\n';}
+    x+='    </fanWalls>\n  </mech>\n';
+  }
+  x+='</DCFailureTool>';
   var blob=new Blob([x],{type:'application/xml'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario.xml';a.click();
 }
 function csvEsc(v){var s=v==null?'':String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
@@ -842,6 +897,22 @@ function importXML(file){
     while(otherData.length<nStrings)otherData.push({mech:450,pumps:22,misc:400});
     while(fanWallData.length<(parseInt(document.getElementById('numFanWalls').value)||0))fanWallData.push({load:6.03,primary:gs()[0]||'A',secondary:gs()[1]||gs()[0]||'A'});
     renderRowLoads();renderAllocTable(null);recalcBalance();renderOtherTable();renderFanWallTable();renderMechUpsTable();
+    // Load mech topology block if present
+    var root=doc.documentElement;topology=root.getAttribute('topology')||'combined';
+    document.getElementById('topology').value=topology;
+    var mechNode=doc.querySelector('mech');
+    if(mechNode){
+      mechNStrings=parseInt(mechNode.getAttribute('nStrings'))||3;mechMode=mechNode.getAttribute('distMode')||'triple';
+      document.getElementById('mechNumStrings').value=mechNStrings;document.getElementById('mechDistMode').value=mechMode;
+      var mfwN=parseInt(mechNode.getAttribute('numFanWalls'))||0;document.getElementById('mechNumFanWalls').value=mfwN;
+      mechOtherData=[];var moL=mechNode.querySelectorAll('otherLoads string');
+      for(var mi=0;mi<moL.length;mi++){var mol=moL[mi];mechOtherData.push({chiller:parseFloat(mol.getAttribute('chiller'))||0,misc:parseFloat(mol.getAttribute('misc'))||0,mechUps:parseFloat(mol.getAttribute('mechUps'))||0,atsBackup:mol.getAttribute('atsBackup')||''});}
+      var mstrs=mgs();while(mechOtherData.length<mechNStrings)mechOtherData.push({chiller:450,misc:100,mechUps:50,atsBackup:mstrs[(mechOtherData.length+1)%mechNStrings]});
+      mechFanWallData=[];var mfwRows=mechNode.querySelectorAll('fanWalls fanWall');
+      for(var mf=0;mf<mfwRows.length;mf++){var mfw=mfwRows[mf];mechFanWallData.push({load:parseFloat(mfw.getAttribute('load'))||6.75,primary:mfw.getAttribute('primary')||mstrs[0],secondary:mfw.getAttribute('secondary')||mstrs[1%mechNStrings]});}
+    }
+    onTopologyChange();
+    if(topology==='separated'){renderMechOtherTable();renderMechFanWallTable();renderMechUpsLoadsTable();}
     document.getElementById('rowSection').classList.remove('hidden');document.getElementById('allocSection').classList.remove('hidden');document.getElementById('results').style.display='none';
     setTimeout(function(){try{calculate();}catch(_e){}},0);
   }catch(err){alert('Error: '+err.message);}};reader.readAsText(file);
@@ -1050,5 +1121,122 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('scenarioFileInput').addEventListener('change',function(e){if(e.target.files[0])importScenarioFile(e.target.files[0]);e.target.value='';});
   document.getElementById('btnScenarioPrint').addEventListener('click',printScenarioReport);
   document.getElementById('btnScenarioXlsx').addEventListener('click',exportScenarioXlsx);
+  document.getElementById('topology').addEventListener('change',onTopologyChange);
+  document.getElementById('mechDistMode').addEventListener('change',function(){var d={dual:'Dual: Each row fed by 2 busbars (50/50 split). On failure, survivor takes 100%.',triple:'Triple: Two rack halves, each dual-connected to an active string and the common catcher.',quad:'Quad: Two independent paired paths (A/B and C/D), each redistributing only within its pair.',quint:'Quint: Rack groups dual-connected to an active string and a common catcher.',hex:'Hex: 6 strings with dual catchers (E/F). Quad-fed only.'};document.getElementById('mechModeDesc').textContent=d[this.value]||'';if(this.value==='hex'){var ms=document.getElementById('mechNumStrings');if(parseInt(ms.value)<6)ms.value=6;}});
+  document.getElementById('mechNumStrings').addEventListener('change',resizeMech);
+  document.getElementById('mechNumFanWalls').addEventListener('change',resizeMechFanWalls);
 });
+function onTopologyChange(){
+  topology=document.getElementById('topology').value;
+  var desc=topology==='combined'?'Combined: IT and mechanical loads share the same power strings. This is the existing sizing methodology.':'Separated: Mechanical loads run on an independent string bank (labelled M-A, M-B, ...). Mech UPS, Generator and Transformer are sized separately. Power factors and distribution loss remain shared.';
+  document.getElementById('topoDesc').textContent=desc;
+  var mechBlock=document.getElementById('mechTopologyBlock');
+  var itMechSections=document.querySelectorAll('.itMechSection');
+  if(topology==='separated'){
+    mechBlock.style.display='';
+    for(var i=0;i<itMechSections.length;i++)itMechSections[i].style.display='none';
+    resizeMech();
+    resizeMechFanWalls();
+  }else{
+    mechBlock.style.display='none';
+    for(var i=0;i<itMechSections.length;i++)itMechSections[i].style.display='';
+  }
+}
+function resizeMech(){
+  mechNStrings=parseInt(document.getElementById('mechNumStrings').value)||3;
+  mechMode=document.getElementById('mechDistMode').value||'triple';
+  var oldO=mechOtherData.slice();mechOtherData=[];
+  var strs=mgs();
+  for(var i=0;i<mechNStrings;i++){
+    var prior=oldO[i];
+    mechOtherData.push({
+      chiller: prior?prior.chiller:450,
+      misc: prior?prior.misc:100,
+      mechUps: prior?prior.mechUps:50,
+      atsBackup: (prior&&strs.indexOf(prior.atsBackup)>=0)?prior.atsBackup:(strs[(i+1)%mechNStrings])
+    });
+  }
+  renderMechOtherTable();
+  renderMechUpsLoadsTable();
+  // Fan walls may reference M-strings that no longer exist - remap
+  for(var j=0;j<mechFanWallData.length;j++){
+    if(strs.indexOf(mechFanWallData[j].primary)<0)mechFanWallData[j].primary=strs[0];
+    if(strs.indexOf(mechFanWallData[j].secondary)<0)mechFanWallData[j].secondary=strs[1%mechNStrings];
+  }
+  renderMechFanWallTable();
+}
+function resizeMechFanWalls(){
+  var n=parseInt(document.getElementById('mechNumFanWalls').value)||0;
+  var strs=mgs();
+  var old=mechFanWallData.slice();mechFanWallData=[];
+  for(var i=0;i<n;i++){
+    var prior=old[i];
+    mechFanWallData.push({
+      load: prior?prior.load:6.75,
+      primary: (prior&&strs.indexOf(prior.primary)>=0)?prior.primary:strs[i%mechNStrings],
+      secondary: (prior&&strs.indexOf(prior.secondary)>=0)?prior.secondary:strs[(i+1)%mechNStrings]
+    });
+  }
+  renderMechFanWallTable();
+}
+function selOptionsFrom(list,sel){var h='';for(var i=0;i<list.length;i++)h+='<option value="'+list[i]+'"'+(list[i]===sel?' selected':'')+'>'+list[i]+'</option>';return h;}
+function renderMechOtherTable(){
+  var strs=mgs();var tb=document.getElementById('mechOtherBody');var html='';
+  for(var i=0;i<mechOtherData.length;i++){
+    var o=mechOtherData[i];var tot=o.chiller+o.misc;
+    var backups=strs.filter(function(s){return s!==strs[i];});
+    html+='<tr><td><strong>'+strs[i]+'</strong></td>';
+    html+='<td><input type="number" data-moi="'+i+'" data-f="chiller" value="'+o.chiller+'" step="1" min="0"></td>';
+    html+='<td><input type="number" data-moi="'+i+'" data-f="misc" value="'+o.misc+'" step="1" min="0"></td>';
+    html+='<td><select data-moi="'+i+'" data-f="atsBackup">'+selOptionsFrom(backups,o.atsBackup)+'</select></td>';
+    html+='<td class="v">'+fmt(tot)+'</td></tr>';
+  }
+  tb.innerHTML=html;
+  tb.querySelectorAll('input,select').forEach(function(el){el.addEventListener('change',function(e){
+    var moi=parseInt(e.target.getAttribute('data-moi')),f=e.target.getAttribute('data-f');
+    if(f==='chiller'||f==='misc')mechOtherData[moi][f]=parseFloat(e.target.value)||0;
+    else mechOtherData[moi][f]=e.target.value;
+    renderMechOtherTable();renderMechUpsLoadsTable();
+  });});
+}
+function renderMechFanWallTable(){
+  var strs=mgs(),tb=document.getElementById('mechFanWallBody'),html='';
+  for(var i=0;i<mechFanWallData.length;i++){
+    var fw=mechFanWallData[i];
+    html+='<tr><td>'+(i+1)+'</td>';
+    html+='<td><input type="number" data-mfi="'+i+'" data-f="load" value="'+fw.load+'" step="0.25" min="0"></td>';
+    html+='<td><select data-mfi="'+i+'" data-f="primary">'+selOptionsFrom(strs,fw.primary)+'</select></td>';
+    html+='<td><select data-mfi="'+i+'" data-f="secondary">'+selOptionsFrom(strs,fw.secondary)+'</select></td></tr>';
+  }
+  tb.innerHTML=html;
+  tb.querySelectorAll('input,select').forEach(function(el){el.addEventListener('change',function(e){
+    var mfi=parseInt(e.target.getAttribute('data-mfi')),f=e.target.getAttribute('data-f');
+    if(f==='load')mechFanWallData[mfi].load=parseFloat(e.target.value)||0;
+    else mechFanWallData[mfi][f]=e.target.value;
+    renderMechFanWallSummary();
+  });});
+  renderMechFanWallSummary();
+}
+function renderMechFanWallSummary(){
+  var strs=mgs(),loads={},total=0;for(var i=0;i<strs.length;i++)loads[strs[i]]=0;
+  for(var j=0;j<mechFanWallData.length;j++){var fw=mechFanWallData[j];if(loads[fw.primary]!==undefined)loads[fw.primary]+=fw.load;total+=fw.load;}
+  var html='<strong>Normal Mech Fan Wall Load per String:</strong> ';
+  for(var k=0;k<strs.length;k++)html+=strs[k]+': '+fmt(loads[strs[k]])+' kW &nbsp; ';
+  html+='<br><strong>Total Mech Fan Wall Load:</strong> '+fmt(total)+' kW';
+  var el=document.getElementById('mechFanWallSummary');if(el)el.innerHTML=html;
+}
+function renderMechUpsLoadsTable(){
+  var strs=mgs(),tb=document.getElementById('mechUpsLoadsBody'),html='';
+  for(var i=0;i<mechOtherData.length;i++){
+    var o=mechOtherData[i];
+    html+='<tr><td><strong>'+strs[i]+'</strong></td>';
+    html+='<td><input type="number" data-mui="'+i+'" value="'+o.mechUps+'" step="1" min="0"></td>';
+    html+='<td>'+o.atsBackup+'</td></tr>';
+  }
+  tb.innerHTML=html;
+  tb.querySelectorAll('input').forEach(function(el){el.addEventListener('change',function(e){
+    var mui=parseInt(e.target.getAttribute('data-mui'));
+    mechOtherData[mui].mechUps=parseFloat(e.target.value)||0;
+  });});
+}
 </script></body></html>
