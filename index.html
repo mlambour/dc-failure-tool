@@ -236,6 +236,14 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>UPS (kVA)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer Calc (kVA)</th><th>Transformer Std (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
 <div class="cd" id="mechMatrixCard" style="display:none"><h2>🔋 Mech UPS Failure Scenario Matrix</h2><p class="nt">Mech UPS output on each surviving string per failure. Includes Fan Wall transfer plus other mech UPS loads.</p><div class="sx"><table><thead id="mechMatrixHead"></thead><tbody id="mechMatrixBody"></tbody></table></div></div>
 <div class="cd" id="mechSizingCard" style="display:none"><h2>🔋 Mech UPS Failure Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst Mech UPS Output (kW)</th><th>Worst Mech UPS Input (kW)</th><th>Mech UPS (kVA)</th><th>Scenario</th></tr></thead><tbody id="mechSizingBody"></tbody></table></div></div>
+
+<div id="separatedMechResults" style="display:none">
+<div class="cd" style="border-top:3px solid var(--accent)"><h2>⚙️ Separated Mechanical Topology — Results</h2><p class="nt">Independent mechanical string bank. Chiller and Mech UPS loads transfer to the nominated ATS backup string on failure. Misc loads drop out.</p></div>
+<div class="cd"><h2>⚙️ Mech Normal Operation Summary</h2><div class="sx"><table><thead><tr><th>Mech String</th><th>Chiller (kW)</th><th>Misc (kW)</th><th>Fan Wall (kW)</th><th>Mech UPS Load (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Mech UPS (kVA)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="mechNormalBody"></tbody></table></div></div>
+<div class="cd"><h2>⚙️ Mech UPS Failure Scenario Matrix</h2><p class="nt">Mech UPS output on each surviving string per failure (fan wall transfer + chiller/Mech UPS ATS transfer).</p><div class="sx"><table><thead id="sepMechMatrixHead"></thead><tbody id="sepMechMatrixBody"></tbody></table></div></div>
+<div class="cd"><h2>⚙️ Mech Generator Failure Scenario Matrix</h2><p class="nt">Total generator load on each surviving string per failure (UPS input + chiller + misc).</p><div class="sx"><table><thead id="sepMechGenMatrixHead"></thead><tbody id="sepMechGenMatrixBody"></tbody></table></div></div>
+<div class="cd"><h2>⚙️ Mech Equipment Sizing</h2><div class="sx"><table><thead><tr><th>Mech String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>UPS (kVA)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer Calc (kVA)</th><th>Transformer Std (kVA)</th><th>UPS Scenario</th><th>Gen Scenario</th></tr></thead><tbody id="sepMechSizingBody"></tbody></table></div></div>
+</div>
 <div class="br" style="margin-bottom:20px">
 <button class="btn bs" id="btnExportCsv">📊 Export CSV</button>
 <button class="btn bp" id="btnPrint">📄 Print / PDF</button>
@@ -634,6 +642,52 @@ function calcIT(failString){
   if(failString)delete load[failString];return load;
 }
 
+// Mech parallel calculations (Separated topology only)
+function calcMechFanWallLoads(failString){
+  var strs=mgs();var load={};for(var i=0;i<strs.length;i++)load[strs[i]]=0;
+  for(var j=0;j<mechFanWallData.length;j++){
+    var fw=mechFanWallData[j],target=(failString&&fw.primary===failString)?fw.secondary:fw.primary;
+    if(target&&load[target]!==undefined)load[target]+=fw.load;
+  }
+  if(failString&&load[failString]!==undefined)delete load[failString];
+  return load;
+}
+// Returns per-string chiller (ATS transferable) and misc (drops on failure)
+function calcMechChiller(failString){
+  var strs=mgs();var load={};for(var i=0;i<strs.length;i++)load[strs[i]]=0;
+  for(var i=0;i<mechOtherData.length;i++){
+    var s=strs[i],o=mechOtherData[i];
+    if(failString===s){
+      // Chiller transfers to ATS backup; misc drops
+      if(o.atsBackup&&load[o.atsBackup]!==undefined)load[o.atsBackup]+=o.chiller;
+    }else{
+      load[s]+=o.chiller;
+    }
+  }
+  if(failString&&load[failString]!==undefined)delete load[failString];
+  return load;
+}
+function calcMechMisc(failString){
+  var strs=mgs();var load={};for(var i=0;i<strs.length;i++)load[strs[i]]=0;
+  for(var i=0;i<mechOtherData.length;i++){var s=strs[i],o=mechOtherData[i];if(failString===s)continue;load[s]+=o.misc;}
+  if(failString&&load[failString]!==undefined)delete load[failString];
+  return load;
+}
+function calcMechUpsLoad(failString){
+  var strs=mgs();var load={};for(var i=0;i<strs.length;i++)load[strs[i]]=0;
+  for(var i=0;i<mechOtherData.length;i++){
+    var s=strs[i],o=mechOtherData[i];
+    if(failString===s){
+      // Mech UPS load follows the chiller's ATS backup
+      if(o.atsBackup&&load[o.atsBackup]!==undefined)load[o.atsBackup]+=o.mechUps;
+    }else{
+      load[s]+=o.mechUps;
+    }
+  }
+  if(failString&&load[failString]!==undefined)delete load[failString];
+  return load;
+}
+
 function calculate(){
   if(allocData.length===0){alert('Complete Step 1 and Step 2 first.');return;}
   var strings=gs();
@@ -645,8 +699,20 @@ function calculate(){
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
   var scenarios={};scenarios['Normal']=calcIT(null);for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
-  var fanWallScenarios={};fanWallScenarios['Normal']=calcFanWallLoads(null);for(var fs=0;fs<strings.length;fs++)fanWallScenarios[strings[fs]+' Fails']=calcFanWallLoads(strings[fs]);
-  var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.misc;}
+  // In Separated topology, IT strings carry NO mech/fan-wall/other loads; those move to Mech topology
+  var fanWallScenarios={};
+  if(topology==='separated'){
+    fanWallScenarios['Normal']={};for(var i=0;i<strings.length;i++)fanWallScenarios['Normal'][strings[i]]=0;
+    for(var fs=0;fs<strings.length;fs++){fanWallScenarios[strings[fs]+' Fails']={};for(var fi=0;fi<strings.length;fi++)fanWallScenarios[strings[fs]+' Fails'][strings[fi]]=0;}
+  }else{
+    fanWallScenarios['Normal']=calcFanWallLoads(null);
+    for(var fs=0;fs<strings.length;fs++)fanWallScenarios[strings[fs]+' Fails']=calcFanWallLoads(strings[fs]);
+  }
+  var oLoad={};
+  if(topology==='separated'){for(var i=0;i<strings.length;i++)oLoad[strings[i]]=0;}
+  else{for(var i=0;i<strings.length;i++){var o=otherData[i];oLoad[strings[i]]=o.mech+o.misc;}}
+  // Effective other-loads view: zeroed out in Separated topology (mech loads move to Mech bank)
+  var effOther=topology==='separated'?strings.map(function(){return {mech:0,pumps:0,misc:0};}):otherData;
 
   var nb=document.getElementById('normalBody');var nh=document.getElementById('normalHead');var nhtml='';var normalIT=scenarios['Normal'];
   var upsMode=document.getElementById('upsMode').value;
@@ -654,7 +720,7 @@ function calculate(){
     ?'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT + Mech UPS Output (kW)</th><th>IT + Mech UPS Input (kW)</th><th>IT UPS (kVA)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>'
     :'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>IT UPS (kVA)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Mech UPS (kVA)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>';
   for(var i=0;i<strings.length;i++){
-    var s=strings[i],it=normalIT[s]||0,od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=fanWallScenarios['Normal'][s]||0;
+    var s=strings[i],it=normalIT[s]||0,od=effOther[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=fanWallScenarios['Normal'][s]||0;
     var mechUpsTotal=fanWallLoad+od.pumps;
     var mainUpsOut=upsMode==='combined'?(it+mechUpsTotal):it;
     var upsBase=mainUpsOut*(1+infraL),ui=upsBase*(1+chg+loss);
@@ -709,7 +775,7 @@ function calculate(){
         var mkey=mkeys[mq];
         if(mkey===ms+' Fails'){mechMhtml+='<td style="color:#555">—</td>';continue;}
         var scenFan=(fanWallScenarios[mkey]&&fanWallScenarios[mkey][ms])||0;
-        var od=otherData[mi]||{mech:0,pumps:0,misc:0};
+        var od=effOther[mi]||{mech:0,pumps:0,misc:0};
         var mval=scenFan+od.pumps;
         if(mval>mbest){mbest=mval;mbestS=mkey;}
         mechMhtml+='<td>'+fmt(mval)+'</td>';
@@ -731,7 +797,7 @@ function calculate(){
   var criticalMechUpsOut=0,criticalMechUpsIn=0,criticalMechUpsKva=0,criticalMechScenario='',criticalMechString='';
   var sizingRows=[];
   for(var i=0;i<strings.length;i++){
-    var s=strings[i],w=wPS[s],od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
+    var s=strings[i],w=wPS[s],od=effOther[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
     var mechUpsTotal=fanWallLoad+od.pumps;
     var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),ukva=ui/upsPf,mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/genPf;
     var txCalc=gk/txPf,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txCalc){txRt=txR[t];break;}}
@@ -798,9 +864,109 @@ function calculate(){
   if(warnings.length===0)wb.innerHTML='<div class="warn warn-low"><strong>No validation warnings</strong>Inputs and allocation passed the current validation checks.</div>';
   else wb.innerHTML=warnings.map(function(w){return '<div class="warn warn-'+w.level+'"><strong>'+w.title+'</strong>'+w.text+'</div>';}).join('');
 
+  // Separated topology: run parallel Mech calculation and render
+  renderSeparatedMechResults({chg:chg,loss:loss,genPf:genPf,upsPf:upsPf,txPf:txPf,infraL:infraL,txR:txR});
+
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
+
+function renderSeparatedMechResults(cfg){
+  var wrap=document.getElementById('separatedMechResults');
+  if(topology!=='separated'){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  var strs=mgs();
+  var scenarios={};scenarios['Normal']={fw:calcMechFanWallLoads(null),chl:calcMechChiller(null),misc:calcMechMisc(null),ups:calcMechUpsLoad(null)};
+  for(var i=0;i<strs.length;i++){var s=strs[i];scenarios[s+' Fails']={fw:calcMechFanWallLoads(s),chl:calcMechChiller(s),misc:calcMechMisc(s),ups:calcMechUpsLoad(s)};}
+
+  // Normal Summary
+  var nb=document.getElementById('mechNormalBody');var nhtml='';var norm=scenarios['Normal'];
+  for(var i=0;i<strs.length;i++){
+    var s=strs[i];
+    var chill=norm.chl[s]||0,misc=norm.misc[s]||0,fw=norm.fw[s]||0,mupsLoad=norm.ups[s]||0;
+    var upsOut=fw+mupsLoad,upsBase=upsOut*(1+cfg.infraL),upsIn=upsBase*(1+cfg.chg+cfg.loss),upsKva=upsOut>0?upsIn/cfg.upsPf:0;
+    var gkBase=upsIn+chill+misc,gk=gkBase*(1+cfg.infraL),gv=gk/cfg.genPf;
+    nhtml+='<tr><td><strong>'+s+'</strong></td><td>'+fmt(chill)+'</td><td>'+fmt(misc)+'</td><td>'+fmt(fw)+'</td><td>'+fmt(mupsLoad)+'</td><td class="v">'+fmt(upsOut)+'</td><td>'+fmt(upsIn)+'</td><td>'+fmt(upsKva)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
+  }
+  nb.innerHTML=nhtml;
+
+  // Mech UPS Failure Matrix
+  var mh=document.getElementById('sepMechMatrixHead'),mb=document.getElementById('sepMechMatrixBody');
+  var hh='<tr><th>String</th><th>Normal</th>';for(var i=0;i<strs.length;i++)hh+='<th>'+strs[i]+' Fails</th>';hh+='<th>Worst Case</th></tr>';mh.innerHTML=hh;
+  var mechUpsWorst={};var mhtml='';
+  for(var i=0;i<strs.length;i++){
+    var s=strs[i],best=0,bestS='Normal';
+    mhtml+='<tr><td><strong>'+s+'</strong></td>';
+    var keys=['Normal'];for(var j=0;j<strs.length;j++)keys.push(strs[j]+' Fails');
+    for(var k=0;k<keys.length;k++){
+      var key=keys[k],sc=scenarios[key];
+      if(key===s+' Fails'){mhtml+='<td style="color:#555">—</td>';continue;}
+      var val=(sc.fw[s]||0)+(sc.ups[s]||0);
+      if(val>best){best=val;bestS=key;}
+      mhtml+='<td>'+fmt(val)+'</td>';
+    }
+    mechUpsWorst[s]={val:best,scen:bestS};
+    var cls=best>0?'tc':'to';
+    mhtml+='<td><span class="tg '+cls+'">'+fmt(best)+'kW</span> '+bestS+'</td></tr>';
+  }
+  mb.innerHTML=mhtml;
+
+  // Mech Generator Failure Matrix (total gen load per surviving string per scenario)
+  var gh=document.getElementById('sepMechGenMatrixHead'),gb=document.getElementById('sepMechGenMatrixBody');
+  gh.innerHTML=hh;
+  var mechGenWorst={};var ghtml='';
+  for(var i=0;i<strs.length;i++){
+    var s=strs[i],best=0,bestS='Normal';
+    ghtml+='<tr><td><strong>'+s+'</strong></td>';
+    var keys=['Normal'];for(var j=0;j<strs.length;j++)keys.push(strs[j]+' Fails');
+    for(var k=0;k<keys.length;k++){
+      var key=keys[k],sc=scenarios[key];
+      if(key===s+' Fails'){ghtml+='<td style="color:#555">—</td>';continue;}
+      var chill=sc.chl[s]||0,misc=sc.misc[s]||0,fw=sc.fw[s]||0,mupsLoad=sc.ups[s]||0;
+      var upsOut=fw+mupsLoad,upsIn=upsOut*(1+cfg.infraL)*(1+cfg.chg+cfg.loss);
+      var gk=(upsIn+chill+misc)*(1+cfg.infraL);
+      if(gk>best){best=gk;bestS=key;}
+      ghtml+='<td>'+fmt(gk)+'</td>';
+    }
+    mechGenWorst[s]={val:best,scen:bestS};
+    var cls=best>0?'tc':'to';
+    ghtml+='<td><span class="tg '+cls+'">'+fmt(best)+'kW</span> '+bestS+'</td></tr>';
+  }
+  gb.innerHTML=ghtml;
+
+  // Sizing
+  var sb=document.getElementById('sepMechSizingBody');var shtml='';
+  var critUpsIn=0,critUpsStr='',critGen=0,critGenStr='';
+  var sizingRows=[];
+  for(var i=0;i<strs.length;i++){
+    var s=strs[i],w=mechUpsWorst[s],gw=mechGenWorst[s];
+    var wUpsOut=w.val,wUpsIn=wUpsOut>0?wUpsOut*(1+cfg.infraL)*(1+cfg.chg+cfg.loss):0,wUpsKva=wUpsIn>0?wUpsIn/cfg.upsPf:0;
+    var wGk=gw.val,wGv=wGk/cfg.genPf;
+    var txCalc=wGk/cfg.txPf,txRt=cfg.txR.length?cfg.txR[cfg.txR.length-1]:'';
+    for(var t=0;t<cfg.txR.length;t++){if(cfg.txR[t]>=txCalc){txRt=cfg.txR[t];break;}}
+    if(wUpsIn>critUpsIn){critUpsIn=wUpsIn;critUpsStr=s;}
+    if(wGv>critGen){critGen=wGv;critGenStr=s;}
+    sizingRows.push({s:s,uo:wUpsOut,ui:wUpsIn,ukva:wUpsKva,gk:wGk,gv:wGv,txCalc:txCalc,txRt:txRt,uScen:w.scen,gScen:gw.scen});
+  }
+  for(var sr=0;sr<sizingRows.length;sr++){
+    var row=sizingRows[sr],isUps=row.s===critUpsStr,isGen=row.s===critGenStr;
+    var upsClass=isUps?'cr':'v',genClass=isGen?'cr':'v';
+    var tags='';if(isUps)tags+=' <span class="tg tc">CRITICAL (UPS)</span>';if(isGen)tags+=' <span class="tg tc">CRITICAL (GEN)</span>';
+    shtml+='<tr><td><strong>'+row.s+'</strong>'+tags+'</td><td class="'+upsClass+'">'+fmt(row.uo)+'</td><td class="'+upsClass+'">'+fmt(row.ui)+'</td><td class="'+upsClass+'">'+fmt(row.ukva)+'</td><td class="'+genClass+'">'+fmt(row.gk)+'</td><td class="'+genClass+'">'+fmt(row.gv)+'</td><td class="'+genClass+'">'+fmt(row.txCalc)+'</td><td class="'+genClass+'">'+row.txRt+'</td><td>'+row.uScen+'</td><td>'+row.gScen+'</td></tr>';
+  }
+  sb.innerHTML=shtml;
+
+  // Append mech equipment to exec summary
+  var es=document.getElementById('execSummary');
+  var critUpsKva=critUpsStr?(sizingRows.find(function(r){return r.s===critUpsStr;}).ukva):0;
+  var critTx=critGenStr?(sizingRows.find(function(r){return r.s===critGenStr;}).txRt):'';
+  var critTxCalc=critGenStr?(sizingRows.find(function(r){return r.s===critGenStr;}).txCalc):0;
+  es.innerHTML+=''
+    +'<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max UPS Load</h3><div class="sumv">'+fmt(critUpsIn)+' kW</div><div class="sums">Mech UPS basis: '+fmt(critUpsKva)+' kVA on '+critUpsStr+'</div></div>'
+    +'<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max Generator</h3><div class="sumv">'+fmt(critGen)+' kVA</div><div class="sums">Worst-case Mech generator apparent load on '+critGenStr+'</div></div>'
+    +'<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max Transformer</h3><div class="sumv">'+fmt(critTxCalc)+' kVA</div><div class="sums">Selected standard Mech tx: '+critTx+' kVA ('+critGenStr+')</div></div>';
+}
+
 function exportXML(){
   if(allocData.length===0){alert('Generate and allocate first.');return;}
   var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool topology="'+topology+'">\n  <params>\n';
@@ -871,6 +1037,39 @@ function exportCSV(){
     for(var t=0;t<txR.length;t++){if(txR[t]>=txCalc){txRt=txR[t];break;}}sizingRows.push([st,wuo.toFixed(1),wui.toFixed(1),wukva.toFixed(1),wgk.toFixed(1),wgv.toFixed(1),txCalc.toFixed(1),txRt,w.scen]);
   }
   addCsvSection(lines,'Equipment Sizing',sizingRows);
+  // Separated topology: append mech sections
+  if(topology==='separated'){
+    var mstrs=mgs();
+    addCsvSection(lines,'Mech Topology Parameters',[['Parameter','Value'],['Mech Power Strings',mechNStrings],['Mech Distribution Mode',mechMode],['Mech Fan Wall Units',mechFanWallData.length]]);
+    var mOtherRows=[['Mech String','Chiller (kW)','Misc (kW)','Mech UPS Load (kW)','ATS Backup','Total']];
+    for(var mi=0;mi<mechOtherData.length;mi++){var mo=mechOtherData[mi];mOtherRows.push([mstrs[mi],mo.chiller,mo.misc,mo.mechUps,mo.atsBackup,(mo.chiller+mo.misc)]);}
+    addCsvSection(lines,'Mech Other Loads',mOtherRows);
+    var mFwRows=[['Unit','Load (kW)','Primary','Secondary']];
+    for(var mf=0;mf<mechFanWallData.length;mf++){var mfw=mechFanWallData[mf];mFwRows.push(['MFW-'+(mf+1),mfw.load,mfw.primary,mfw.secondary]);}
+    addCsvSection(lines,'Mech Fan Wall Units',mFwRows);
+    var mScen={};mScen['Normal']={fw:calcMechFanWallLoads(null),chl:calcMechChiller(null),misc:calcMechMisc(null),ups:calcMechUpsLoad(null)};
+    for(var mk=0;mk<mstrs.length;mk++){var mks=mstrs[mk];mScen[mks+' Fails']={fw:calcMechFanWallLoads(mks),chl:calcMechChiller(mks),misc:calcMechMisc(mks),ups:calcMechUpsLoad(mks)};}
+    var mNormRows=[['Mech String','Chiller (kW)','Misc (kW)','Fan Wall (kW)','Mech UPS Load (kW)','Mech UPS Output (kW)','Mech UPS Input (kW)','Mech UPS (kVA)','Gen Load (kW)','Gen (kVA)']];
+    for(var mn=0;mn<mstrs.length;mn++){
+      var ms=mstrs[mn],nm=mScen['Normal'];
+      var chill=nm.chl[ms]||0,misc=nm.misc[ms]||0,fw=nm.fw[ms]||0,ul=nm.ups[ms]||0;
+      var uo=fw+ul,ui=uo*(1+infraL)*(1+chg+loss),uk=uo>0?ui/upsPf:0,gk=(ui+chill+misc)*(1+infraL),gv=gk/genPf;
+      mNormRows.push([ms,chill.toFixed(1),misc.toFixed(1),fw.toFixed(1),ul.toFixed(1),uo.toFixed(1),ui.toFixed(1),uk.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
+    }
+    addCsvSection(lines,'Mech Normal Operation Summary',mNormRows);
+    // Mech sizing
+    var mSizRows=[['Mech String','Worst UPS Out (kW)','UPS Input (kW)','UPS (kVA)','Gen (kW)','Gen (kVA)','Transformer Calc (kVA)','Transformer Std (kVA)','UPS Scenario','Gen Scenario']];
+    for(var mz=0;mz<mstrs.length;mz++){
+      var ms=mstrs[mz];
+      var keys=['Normal'];for(var kk=0;kk<mstrs.length;kk++)keys.push(mstrs[kk]+' Fails');
+      var wUps=0,wUpsScen='Normal',wGen=0,wGenScen='Normal';
+      for(var q=0;q<keys.length;q++){var key=keys[q];if(key===ms+' Fails')continue;var sc=mScen[key];var fw=sc.fw[ms]||0,ul=sc.ups[ms]||0,ch=sc.chl[ms]||0,mi=sc.misc[ms]||0;var uo=fw+ul,ui=uo*(1+infraL)*(1+chg+loss),gk=(ui+ch+mi)*(1+infraL);if(uo>wUps){wUps=uo;wUpsScen=key;}if(gk>wGen){wGen=gk;wGenScen=key;}}
+      var wUi=wUps>0?wUps*(1+infraL)*(1+chg+loss):0,wUk=wUi>0?wUi/upsPf:0,wGv=wGen/genPf,txCalc=wGen/txPf,txRt=txR.length?txR[txR.length-1]:'';
+      for(var t=0;t<txR.length;t++){if(txR[t]>=txCalc){txRt=txR[t];break;}}
+      mSizRows.push([ms,wUps.toFixed(1),wUi.toFixed(1),wUk.toFixed(1),wGen.toFixed(1),wGv.toFixed(1),txCalc.toFixed(1),txRt,wUpsScen,wGenScen]);
+    }
+    addCsvSection(lines,'Mech Equipment Sizing',mSizRows);
+  }
   var blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario-report.csv';a.click();
 }
 function importXML(file){
