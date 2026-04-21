@@ -170,10 +170,10 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <li>Generator sizing is based on worst-case surviving string demand with distribution losses first applied to UPS output, then UPS charging and losses applied to that adjusted UPS demand, then fixed non-IT loads added, then a further distribution loss allowance applied to the combined total before conversion by entered power factor.</li>
 <li>In separate UPS mode, the tool also reports mechanical UPS output and input from the entered Mech UPS loads and Fan Wall units for visibility, while generator sizing still uses the combined load basis.</li>
 <li>Transformer sizing is selected from the entered transformer rating list using the calculated generator apparent power.</li>
-<li>Dual mode assumes 50/50 split with survivor taking 100% on failure.</li>
-<li>Triple mode assumes two active feeds at 50/50 and one catcher that absorbs the lost 50% share on active-feed failure.</li>
+<li>Dual mode assumes all racks are dual-connected across A/B, with each string carrying 50% of every rack load in normal operation and the survivor taking 100% on failure.</li>
+<li>Triple mode assumes the first rack half is dual-connected across A/C and the second half across B/C, with each connected pair sharing 50/50 in normal operation.</li>
 <li>Quad mode assumes two independent paired paths (A/B and C/D), each redistributing only within its pair.</li>
-<li>Quint mode assumes four active feeds at 25% each plus one catcher that absorbs only the failed active 25% share.</li>
+<li>Quint mode assumes rack groups are dual-connected across A/E, B/E, C/E and D/E, with each connected pair sharing 50/50 in normal operation.</li>
 <li>Validation warnings are advisory checks only and currently use these thresholds:</li>
 <li><strong>Normal IT load imbalance:</strong> moderate warning above 5%; high warning above 10%.</li>
 <li><strong>Governing failure uplift:</strong> material warning above 20% over normal IT load on the affected surviving string; severe warning above 40%.</li>
@@ -221,7 +221,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 <script>
 var SL='ABCDEFGHIJ',rowLoads=[],rowRacks=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
-var MODES={dual:'Dual: 2 busbars per row (50/50). On failure, survivor takes 100%.',triple:'Triple: 2 active (50/50) + 1 catcher (0%). On failure, catcher picks up lost 50%.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: 2 pairs (A/B+C/D) at 25% each + catcher at 0%. On failure, catcher absorbs the lost 25%. Active strings stay at 25%.'};
+var MODES={dual:'Dual: all racks are dual-connected A/B at 50/50. On failure, survivor takes 100%.',triple:'Triple: first rack half is A/C, second rack half is B/C, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected half.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: rack groups are dual-connected A/E, B/E, C/E and D/E, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected group.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
 function fmt(n){return n>=10?Math.round(n).toLocaleString('en'):n.toFixed(1);}
@@ -372,17 +372,29 @@ function rackSplitForRow(rowIdx,r){
   var kWperRack=r.load/racks;
   var result={};
   if(mode==='dual'){
-    var halves=splitRacks(racks,2,rowIdx);
-    result[r.a]=halves[0]*kWperRack;result[r.b]=halves[1]*kWperRack;
+    result[r.a]=r.load/2;result[r.b]=r.load/2;
   }else if(mode==='triple'){
     var halves=splitRacks(racks,2,rowIdx);
-    result[r.a]=halves[0]*kWperRack;result[r.b]=halves[1]*kWperRack;
-  }else{
+    var leftLoad=halves[0]*kWperRack,rightLoad=halves[1]*kWperRack;
+    result[r.a]=leftLoad/2;result[r.c]=(result[r.c]||0)+leftLoad/2;
+    result[r.b]=rightLoad/2;result[r.c]=(result[r.c]||0)+rightLoad/2;
+  }else if(mode==='quad'){
     var halves=splitRacks(racks,2,rowIdx);
     var leftPair=splitRacks(halves[0],2,rowIdx);
     var rightPair=splitRacks(halves[1],2,rowIdx+1);
     result[r.a]=leftPair[0]*kWperRack;result[r.b]=leftPair[1]*kWperRack;
     result[r.c]=rightPair[0]*kWperRack;result[r.d]=rightPair[1]*kWperRack;
+  }else{
+    var base=Math.floor(racks/4),rem=racks%4;
+    var groups=[base,base,base,base];
+    var order=rowIdx%2===0?[0,3,1,2]:[1,2,0,3];
+    for(var gr=0;gr<rem;gr++)groups[order[gr]]++;
+    var groupFeeds=[r.a,r.b,r.c,r.d];
+    for(var gi=0;gi<4;gi++){
+      var gLoad=groups[gi]*kWperRack;
+      result[groupFeeds[gi]]=(result[groupFeeds[gi]]||0)+gLoad/2;
+      result[r.e]=(result[r.e]||0)+gLoad/2;
+    }
   }
   return result;
 }
@@ -467,23 +479,24 @@ function calcIT(failString){
       else if(failString&&r.b===failString)load[r.a]+=r.load;
       else{load[r.a]+=rs[r.a];load[r.b]+=rs[r.b];}
     }else if(mode==='triple'){
-      if(failString&&r.a===failString){load[r.b]+=(rs[r.b]||0);load[r.c]+=(rs[r.a]||0);}
-      else if(failString&&r.b===failString){load[r.a]+=(rs[r.a]||0);load[r.c]+=(rs[r.b]||0);}
-      else if(failString&&r.c===failString){load[r.a]+=(rs[r.a]||0);load[r.b]+=(rs[r.b]||0);}
-      else{load[r.a]+=(rs[r.a]||0);load[r.b]+=(rs[r.b]||0);}
+      var racks=rowRacks[i]||22,kWperRack=r.load/racks,halves=splitRacks(racks,2,i),leftLoad=halves[0]*kWperRack,rightLoad=halves[1]*kWperRack;
+      if(failString===r.a){load[r.c]+=leftLoad;load[r.b]+=rightLoad/2;load[r.c]+=rightLoad/2;}
+      else if(failString===r.b){load[r.a]+=leftLoad/2;load[r.c]+=leftLoad/2;load[r.c]+=rightLoad;}
+      else if(failString===r.c){load[r.a]+=leftLoad;load[r.b]+=rightLoad;}
+      else{load[r.a]+=leftLoad/2;load[r.c]+=leftLoad/2;load[r.b]+=rightLoad/2;load[r.c]+=rightLoad/2;}
     }else if(mode==='quad'){
       var leftLoad=(rs[r.a]||0)+(rs[r.b]||0),rightLoad=(rs[r.c]||0)+(rs[r.d]||0);
       if(failString===r.a)load[r.b]+=leftLoad;else if(failString===r.b)load[r.a]+=leftLoad;else{load[r.a]+=(rs[r.a]||0);load[r.b]+=(rs[r.b]||0);}
       if(failString===r.c)load[r.d]+=rightLoad;else if(failString===r.d)load[r.c]+=rightLoad;else{load[r.c]+=(rs[r.c]||0);load[r.d]+=(rs[r.d]||0);}
     }else{
-      var actives=[r.a,r.b,r.c,r.d],catcher=r.e;
-      if(failString===catcher){for(var z=0;z<actives.length;z++)load[actives[z]]+=(rs[actives[z]]||0);}
-      else if(actives.indexOf(failString)>=0){
-        var failedLoad=rs[failString]||0;
-        load[catcher]+=failedLoad;
-        for(var z=0;z<actives.length;z++)if(actives[z]!==failString)load[actives[z]]+=(rs[actives[z]]||0);
+      var racks=rowRacks[i]||22,kWperRack=r.load/racks,base=Math.floor(racks/4),rem=racks%4,groups=[base,base,base,base],order=i%2===0?[0,3,1,2]:[1,2,0,3],feeds=[r.a,r.b,r.c,r.d],catcher=r.e;
+      for(var gr=0;gr<rem;gr++)groups[order[gr]]++;
+      for(var gi=0;gi<4;gi++){
+        var gLoad=groups[gi]*kWperRack,active=feeds[gi];
+        if(failString===active)load[catcher]+=gLoad;
+        else if(failString===catcher)load[active]+=gLoad;
+        else{load[active]+=gLoad/2;load[catcher]+=gLoad/2;}
       }
-      else{for(var z=0;z<actives.length;z++)load[actives[z]]+=(rs[actives[z]]||0);}
     }
   }
   if(failString)delete load[failString];return load;
