@@ -823,13 +823,22 @@ function calculate(){
   sb.innerHTML=shtml;
   mechSb.innerHTML=mechShtml;
   document.getElementById('mechSizingCard').style.display=upsMode==='separate'?'block':'none';
-  document.getElementById('execSummary').innerHTML=''
+  // Compute Separated mech critical values before exec summary so we can interleave
+  var mechCrit=null;
+  if(topology==='separated'){mechCrit=renderSeparatedMechResults({chg:chg,loss:loss,genPf:genPf,upsPf:upsPf,txPf:txPf,infraL:infraL,txR:txR});}
+  else{document.getElementById('separatedMechResults').style.display='none';}
+  var es=document.getElementById('execSummary');
+  var esHtml=''
     +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical UPS string: '+criticalUpsString+'</div></div>'
-    +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">UPS basis: '+fmt(criticalUpsKva)+' kVA on '+criticalUpsString+'</div></div>'
-    +(upsMode==='separate'?'<div class="sumc"><h3>Max Mech UPS Load</h3><div class="sumv">'+fmt(criticalMechUpsIn)+' kW</div><div class="sums">Mech UPS basis: '+fmt(criticalMechUpsKva)+' kVA on '+criticalMechString+' ('+criticalMechScenario+')</div></div>':'')
-    +'<div class="sumc"><h3>Max Generator Load</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Worst-case generator apparent load on '+criticalGenString+'</div></div>'
-    +'<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+fmt(criticalTxCalc)+' kVA</div><div class="sums">Selected standard size: '+criticalTx+' kVA ('+criticalGenString+')</div></div>'
-    +'<div class="sumc"><h3>Critical Strings</h3><div class="sumv">'+(criticalUpsString===criticalGenString?criticalUpsString:(criticalUpsString+' / '+criticalGenString))+'</div><div class="sums">UPS critical / Generator critical</div></div>';
+    +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">UPS basis: '+fmt(criticalUpsKva)+' kVA on '+criticalUpsString+'</div></div>';
+  if(mechCrit)esHtml+='<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max UPS Load</h3><div class="sumv">'+fmt(mechCrit.upsIn)+' kW</div><div class="sums">Mech UPS basis: '+fmt(mechCrit.upsKva)+' kVA on '+mechCrit.upsStr+'</div></div>';
+  else if(upsMode==='separate')esHtml+='<div class="sumc"><h3>Max Mech UPS Load</h3><div class="sumv">'+fmt(criticalMechUpsIn)+' kW</div><div class="sums">Mech UPS basis: '+fmt(criticalMechUpsKva)+' kVA on '+criticalMechString+' ('+criticalMechScenario+')</div></div>';
+  esHtml+='<div class="sumc"><h3>Max Generator Load</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Worst-case generator apparent load on '+criticalGenString+'</div></div>';
+  if(mechCrit)esHtml+='<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max Generator</h3><div class="sumv">'+fmt(mechCrit.gen)+' kVA</div><div class="sums">Worst-case Mech generator apparent load on '+mechCrit.genStr+'</div></div>';
+  esHtml+='<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+fmt(criticalTxCalc)+' kVA</div><div class="sums">Selected standard size: '+criticalTx+' kVA ('+criticalGenString+')</div></div>';
+  if(mechCrit)esHtml+='<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max Transformer</h3><div class="sumv">'+fmt(mechCrit.txCalc)+' kVA</div><div class="sums">Selected standard Mech tx: '+mechCrit.tx+' kVA ('+mechCrit.genStr+')</div></div>';
+  esHtml+='<div class="sumc"><h3>Critical Strings</h3><div class="sumv">'+(criticalUpsString===criticalGenString?criticalUpsString:(criticalUpsString+' / '+criticalGenString))+'</div><div class="sums">UPS critical / Generator critical</div></div>';
+  es.innerHTML=esHtml;
 
   var warnings=[];
   var normalVals=[];for(var nv=0;nv<strings.length;nv++)normalVals.push(normalIT[strings[nv]]||0);
@@ -861,9 +870,6 @@ function calculate(){
   var wb=document.getElementById('warningBox');
   if(warnings.length===0)wb.innerHTML='<div class="warn warn-low"><strong>No validation warnings</strong>Inputs and allocation passed the current validation checks.</div>';
   else wb.innerHTML=warnings.map(function(w){return '<div class="warn warn-'+w.level+'"><strong>'+w.title+'</strong>'+w.text+'</div>';}).join('');
-
-  // Separated topology: run parallel Mech calculation and render
-  renderSeparatedMechResults({chg:chg,loss:loss,genPf:genPf,upsPf:upsPf,txPf:txPf,infraL:infraL,txR:txR});
 
   document.getElementById('results').style.display='block';
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
@@ -954,15 +960,11 @@ function renderSeparatedMechResults(cfg){
   }
   sb.innerHTML=shtml;
 
-  // Append mech equipment to exec summary
-  var es=document.getElementById('execSummary');
+  // Return critical values so exec summary can interleave mech cards with IT
   var critUpsKva=critUpsStr?(sizingRows.find(function(r){return r.s===critUpsStr;}).ukva):0;
   var critTx=critGenStr?(sizingRows.find(function(r){return r.s===critGenStr;}).txRt):'';
   var critTxCalc=critGenStr?(sizingRows.find(function(r){return r.s===critGenStr;}).txCalc):0;
-  es.innerHTML+=''
-    +'<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max UPS Load</h3><div class="sumv">'+fmt(critUpsIn)+' kW</div><div class="sums">Mech UPS basis: '+fmt(critUpsKva)+' kVA on '+critUpsStr+'</div></div>'
-    +'<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max Generator</h3><div class="sumv">'+fmt(critGen)+' kVA</div><div class="sums">Worst-case Mech generator apparent load on '+critGenStr+'</div></div>'
-    +'<div class="sumc" style="border-color:var(--accent)"><h3>Mech Max Transformer</h3><div class="sumv">'+fmt(critTxCalc)+' kVA</div><div class="sums">Selected standard Mech tx: '+critTx+' kVA ('+critGenStr+')</div></div>';
+  return {upsIn:critUpsIn,upsKva:critUpsKva,upsStr:critUpsStr,gen:critGen,genStr:critGenStr,tx:critTx,txCalc:critTxCalc};
 }
 
 function exportXML(){
