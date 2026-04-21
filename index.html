@@ -91,11 +91,13 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="fr">
 <div class="fg"><label>UPS Charging %</label><input type="number" id="upsCharge" value="3.5" step="0.5"></div>
 <div class="fg"><label>UPS Losses %</label><input type="number" id="upsLoss" value="4" step="0.5"></div>
-<div class="fg"><label>Power Factor</label><input type="number" id="pf" value="0.9" step="0.05" min="0.5" max="1"></div>
+<div class="fg"><label>Generator Power Factor</label><input type="number" id="genPf" value="0.8" step="0.05" min="0.5" max="1"></div>
 <div class="fg"><label>Distribution Loss %</label><input type="number" id="infraLoss" value="1" step="0.05"></div>
 </div>
 <div class="fr">
 <div class="fg"><label>UPS Configuration</label><select id="upsMode"><option value="separate">Separate IT UPS + Mech UPS</option><option value="combined">Combined IT + Mech Equipment UPS</option></select></div>
+<div class="fg"><label>UPS Power Factor</label><input type="number" id="upsPf" value="0.95" step="0.05" min="0.5" max="1"></div>
+<div class="fg"><label>Transformer Power Factor</label><input type="number" id="txPf" value="0.9" step="0.05" min="0.5" max="1"></div>
 </div>
 <div class="fr"><div class="fg" style="min-width:300px"><label>Transformer Ratings (kVA)</label><input type="text" id="txRatings" value="800,1000,1250,1500,2000,2500,3150"></div></div>
 <div class="br">
@@ -177,7 +179,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <li>Validation warnings are advisory checks only and currently use these thresholds:</li>
 <li><strong>Normal IT load imbalance:</strong> moderate warning above 5%; high warning above 10%.</li>
 <li><strong>Governing failure uplift:</strong> material warning above 20% over normal IT load on the affected surviving string; severe warning above 40%.</li>
-<li><strong>Power factor:</strong> warning when entered PF is below 0.80 or above 1.00.</li>
+<li><strong>Generator / UPS / Transformer power factors:</strong> warning when any entered PF is below 0.80 or above 1.00.</li>
 <li><strong>UPS charging allowance:</strong> warning when above 8%.</li>
 <li><strong>UPS loss allowance:</strong> warning when above 8%.</li>
 <li><strong>Distribution loss allowance:</strong> advisory warning when above 5%.</li>
@@ -189,7 +191,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="cd"><h2>📊 Row-Level Normal Distribution</h2><p class="nt">IT load contribution from each row to each string under normal operation (rack-based physical split).</p><div class="sx"><table><thead id="rowDistHead"></thead><tbody id="rowDistBody"></tbody></table></div></div>
 <div class="cd"><h2>📊 Normal Operation Summary</h2><div class="sx"><table><thead id="normalHead"><tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr></thead><tbody id="normalBody"></tbody></table></div></div>
 <div class="cd"><h2>⚡ Failure Scenario Matrix — UPS Output (kW)</h2><p class="nt">UPS output on each surviving string per failure. "—" = failed string.</p><div class="sx"><table><thead id="matrixHead"></thead><tbody id="matrixBody"></tbody></table></div></div>
-<div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
+<div class="cd"><h2>🔧 Equipment Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst UPS Out (kW)</th><th>UPS Input (kW)</th><th>UPS (kVA)</th><th>Gen (kW)</th><th>Gen (kVA)</th><th>Transformer Calc (kVA)</th><th>Transformer Std (kVA)</th><th>Scenario</th></tr></thead><tbody id="sizingBody"></tbody></table></div></div>
 <div class="cd" id="mechMatrixCard" style="display:none"><h2>🔋 Mech UPS Failure Scenario Matrix</h2><p class="nt">Mech UPS output on each surviving string per failure. Includes Fan Wall transfer plus other mech UPS loads.</p><div class="sx"><table><thead id="mechMatrixHead"></thead><tbody id="mechMatrixBody"></tbody></table></div></div>
 <div class="cd" id="mechSizingCard" style="display:none"><h2>🔋 Mech UPS Failure Sizing</h2><div class="sx"><table><thead><tr><th>String</th><th>Worst Mech UPS Output (kW)</th><th>Worst Mech UPS Input (kW)</th><th>Scenario</th></tr></thead><tbody id="mechSizingBody"></tbody></table></div></div>
 <div class="br" style="margin-bottom:20px">
@@ -507,7 +509,9 @@ function calculate(){
   var strings=gs();
   var chg=parseFloat(document.getElementById('upsCharge').value)/100;
   var loss=parseFloat(document.getElementById('upsLoss').value)/100;
-  var pf=parseFloat(document.getElementById('pf').value);
+  var genPf=parseFloat(document.getElementById('genPf').value);
+  var upsPf=parseFloat(document.getElementById('upsPf').value);
+  var txPf=parseFloat(document.getElementById('txPf').value);
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
   var scenarios={};scenarios['Normal']=calcIT(null);for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
@@ -517,8 +521,8 @@ function calculate(){
   var nb=document.getElementById('normalBody');var nh=document.getElementById('normalHead');var nhtml='';var normalIT=scenarios['Normal'];
   var upsMode=document.getElementById('upsMode').value;
   nh.innerHTML=upsMode==='combined'
-    ?'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT + Mech UPS Output (kW)</th><th>IT + Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>'
-    :'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>';
+    ?'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT + Mech UPS Output (kW)</th><th>IT + Mech UPS Input (kW)</th><th>UPS (kVA)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>'
+    :'<tr><th>String</th><th>IT Load (kW)</th><th>Other Load (kW)</th><th>IT UPS Output (kW)</th><th>IT UPS Input (kW)</th><th>UPS (kVA)</th><th>Mech UPS Output (kW)</th><th>Mech UPS Input (kW)</th><th>Gen Load (kW)</th><th>Gen (kVA)</th></tr>';
   for(var i=0;i<strings.length;i++){
     var s=strings[i],it=normalIT[s]||0,od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=fanWallScenarios['Normal'][s]||0;
     var mechUpsTotal=fanWallLoad+od.pumps;
@@ -526,9 +530,10 @@ function calculate(){
     var upsBase=mainUpsOut*(1+infraL),ui=upsBase*(1+chg+loss);
     var mechUpsOut=upsMode==='separate'?mechUpsTotal:0;
     var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
-    var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
-    if(upsMode==='combined')nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
-    else nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
+    var upsKva=ui/upsPf;
+    var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/genPf;
+    if(upsMode==='combined')nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(upsKva)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
+    else nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(upsKva)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
   }
   nb.innerHTML=nhtml;
 
@@ -591,21 +596,21 @@ function calculate(){
 
   var sb=document.getElementById('sizingBody');var shtml='';
   var mechSb=document.getElementById('mechSizingBody');var mechShtml='';
-  var criticalUpsOut=0,criticalUpsIn=0,criticalGen=0,criticalTx=0,criticalScenario='',criticalUpsString='',criticalGenString='';
+  var criticalUpsOut=0,criticalUpsIn=0,criticalUpsKva=0,criticalGen=0,criticalTxCalc=0,criticalTx=0,criticalScenario='',criticalUpsString='',criticalGenString='';
   var criticalMechUpsOut=0,criticalMechUpsIn=0,criticalMechScenario='',criticalMechString='';
   var sizingRows=[];
   for(var i=0;i<strings.length;i++){
     var s=strings[i],w=wPS[s],od=otherData[i]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
     var mechUpsTotal=fanWallLoad+od.pumps;
-    var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
-    var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
-    if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalScenario=w.scen;criticalUpsString=s;}
-    if(gv>criticalGen){criticalGen=gv;criticalTx=txRt;criticalGenString=s;}
+    var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss),ukva=ui/upsPf,mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/genPf;
+    var txCalc=gk/txPf,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txCalc){txRt=txR[t];break;}}
+    if(ui>criticalUpsIn){criticalUpsOut=uo;criticalUpsIn=ui;criticalUpsKva=ukva;criticalScenario=w.scen;criticalUpsString=s;}
+    if(gv>criticalGen){criticalGen=gv;criticalTxCalc=txCalc;criticalTx=txRt;criticalGenString=s;}
     var mw=mechWorst[s]||{val:0,scen:'Normal'};
     var mechWorstOut=mw.val;
     var mechWorstIn=mechWorstOut>0?mechWorstOut*(1+infraL)*(1+chg+loss):0;
     if(mechWorstIn>criticalMechUpsIn){criticalMechUpsOut=mechWorstOut;criticalMechUpsIn=mechWorstIn;criticalMechScenario=mw.scen;criticalMechString=s;}
-    sizingRows.push({s:s,uo:uo,ui:ui,gk:gk,gv:gv,txRt:txRt,scen:w.scen,mechUpsOut:mechWorstOut,mechUpsIn:mechWorstIn,mechScen:mw.scen});
+    sizingRows.push({s:s,uo:uo,ui:ui,ukva:ukva,gk:gk,gv:gv,txCalc:txCalc,txRt:txRt,scen:w.scen,mechUpsOut:mechWorstOut,mechUpsIn:mechWorstIn,mechScen:mw.scen});
   }
   for(var sr=0;sr<sizingRows.length;sr++){
     var row=sizingRows[sr],isUps=row.s===criticalUpsString,isGen=row.s===criticalGenString;
@@ -613,7 +618,7 @@ function calculate(){
     var tags='';
     if(isUps)tags+=' <span class="tg tc">CRITICAL (UPS)</span>';
     if(isGen)tags+=' <span class="tg tc">CRITICAL (GEN)</span>';
-    shtml+='<tr><td><strong>'+row.s+'</strong>'+tags+'</td><td class="'+upsClass+'">'+fmt(row.uo)+'</td><td class="'+upsClass+'">'+fmt(row.ui)+'</td><td class="'+genClass+'">'+fmt(row.gk)+'</td><td class="'+genClass+'">'+fmt(row.gv)+'</td><td class="'+genClass+'">'+row.txRt+'</td><td>'+row.scen+'</td></tr>';
+    shtml+='<tr><td><strong>'+row.s+'</strong>'+tags+'</td><td class="'+upsClass+'">'+fmt(row.uo)+'</td><td class="'+upsClass+'">'+fmt(row.ui)+'</td><td class="'+upsClass+'">'+fmt(row.ukva)+'</td><td class="'+genClass+'">'+fmt(row.gk)+'</td><td class="'+genClass+'">'+fmt(row.gv)+'</td><td class="'+genClass+'">'+fmt(row.txCalc)+'</td><td class="'+genClass+'">'+row.txRt+'</td><td>'+row.scen+'</td></tr>';
     if(upsMode==='separate'){
       var mic=row.s===criticalMechString,mcl=mic?'cr':'v';
       mechShtml+='<tr><td><strong>'+row.s+'</strong>'+(mic?' <span class="tg tc">CRITICAL</span>':'')+'</td><td class="'+mcl+'">'+fmt(row.mechUpsOut)+'</td><td class="'+mcl+'">'+fmt(row.mechUpsIn)+'</td><td>'+row.mechScen+'</td></tr>';
@@ -624,10 +629,10 @@ function calculate(){
   document.getElementById('mechSizingCard').style.display=upsMode==='separate'?'block':'none';
   document.getElementById('execSummary').innerHTML=''
     +'<div class="sumc"><h3>Governing Failure Case</h3><div class="sumv">'+criticalScenario+'</div><div class="sums">Critical UPS string: '+criticalUpsString+'</div></div>'
-    +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">Worst-case UPS input load on '+criticalUpsString+'</div></div>'
+    +'<div class="sumc"><h3>Max UPS Load</h3><div class="sumv">'+fmt(criticalUpsIn)+' kW</div><div class="sums">UPS basis: '+fmt(criticalUpsKva)+' kVA on '+criticalUpsString+'</div></div>'
     +(upsMode==='separate'?'<div class="sumc"><h3>Max Mech UPS Load</h3><div class="sumv">'+fmt(criticalMechUpsIn)+' kW</div><div class="sums">Worst-case mech UPS input on '+criticalMechString+' ('+criticalMechScenario+')</div></div>':'')
     +'<div class="sumc"><h3>Max Generator Load</h3><div class="sumv">'+fmt(criticalGen)+' kVA</div><div class="sums">Worst-case generator apparent load on '+criticalGenString+'</div></div>'
-    +'<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+criticalTx+' kVA</div><div class="sums">Transformer basis governed by '+criticalGenString+'</div></div>'
+    +'<div class="sumc"><h3>Max Transformer Load</h3><div class="sumv">'+fmt(criticalTxCalc)+' kVA</div><div class="sums">Selected standard size: '+criticalTx+' kVA ('+criticalGenString+')</div></div>'
     +'<div class="sumc"><h3>Critical Strings</h3><div class="sumv">'+(criticalUpsString===criticalGenString?criticalUpsString:(criticalUpsString+' / '+criticalGenString))+'</div><div class="sums">UPS critical / Generator critical</div></div>';
 
   var warnings=[];
@@ -642,7 +647,9 @@ function calculate(){
   if(severity>40)warnings.push({level:'high',title:'Severe Governing Failure Increase',text:'The governing failure case drives '+criticalUpsString+' '+fmtD(severity)+'% above normal IT load.'});
   else if(severity>20)warnings.push({level:'med',title:'Material Governing Failure Increase',text:'The governing failure case drives '+criticalUpsString+' '+fmtD(severity)+'% above normal IT load.'});
 
-  if(pf<0.8||pf>1)warnings.push({level:'med',title:'Power Factor Outside Typical Range',text:'Entered power factor is '+pf+'. Review whether this is realistic for the design basis.'});
+  if(genPf<0.8||genPf>1)warnings.push({level:'med',title:'Generator Power Factor Outside Typical Range',text:'Entered generator power factor is '+genPf+'. Review whether this is realistic for the design basis.'});
+  if(upsPf<0.8||upsPf>1)warnings.push({level:'med',title:'UPS Power Factor Outside Typical Range',text:'Entered UPS power factor is '+upsPf+'. Review whether this is realistic for the design basis.'});
+  if(txPf<0.8||txPf>1)warnings.push({level:'med',title:'Transformer Power Factor Outside Typical Range',text:'Entered transformer power factor is '+txPf+'. Review whether this is realistic for the design basis.'});
   if(chg>0.08)warnings.push({level:'med',title:'High UPS Charging Allowance',text:'UPS charging allowance is '+fmtD(chg*100)+'%, which is higher than typical design assumptions.'});
   if(loss>0.08)warnings.push({level:'med',title:'High UPS Loss Allowance',text:'UPS loss allowance is '+fmtD(loss*100)+'%, which may overstate sizing unless intentional.'});
   if(infraL>0.05)warnings.push({level:'low',title:'High Distribution Loss Allowance',text:'Distribution loss allowance is '+fmtD(infraL*100)+'%. Confirm this matches the project basis.'});
@@ -665,7 +672,7 @@ function calculate(){
 function exportXML(){
   if(allocData.length===0){alert('Generate and allocate first.');return;}
   var x='<?xml version="1.0" encoding="UTF-8"?>\n<DCFailureTool>\n  <params>\n';
-  var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','pf','infraLoss','txRatings','upsMode'];
+  var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','genPf','infraLoss','txRatings','upsMode','upsPf','txPf'];
   for(var i=0;i<ids.length;i++)x+='    <'+ids[i]+'>'+document.getElementById(ids[i]).value+'</'+ids[i]+'>\n';
   x+='    <distMode>'+mode+'</distMode>\n  </params>\n  <rows>\n';
   for(var i=0;i<allocData.length;i++){var r=allocData[i];x+='    <row num="'+(i+1)+'" load="'+r.load+'" racks="'+(rowRacks[i]||22)+'" a="'+r.a+'" b="'+r.b+'"'+(r.c?' c="'+r.c+'"':'')+(r.d?' d="'+r.d+'"':'')+(r.e?' e="'+r.e+'"':'')+'/>\n';}
@@ -683,7 +690,9 @@ function exportCSV(){
   var strings=gs();
   var chg=parseFloat(document.getElementById('upsCharge').value)/100;
   var loss=parseFloat(document.getElementById('upsLoss').value)/100;
-  var pf=parseFloat(document.getElementById('pf').value);
+  var genPf=parseFloat(document.getElementById('genPf').value);
+  var upsPf=parseFloat(document.getElementById('upsPf').value);
+  var txPf=parseFloat(document.getElementById('txPf').value);
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
   var scenarios={};scenarios['Normal']=calcIT(null);for(var i=0;i<strings.length;i++)scenarios[strings[i]+' Fails']=calcIT(strings[i]);
@@ -691,19 +700,19 @@ function exportCSV(){
   var oLoad={};for(var i=0;i<strings.length;i++){var o=otherData[i]||{mech:0,pumps:0,misc:0};oLoad[strings[i]]=o.mech+o.misc;}
   var lines=[];
   addCsvSection(lines,'System Parameters',[
-    ['Parameter','Value'],['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],['Power Strings',document.getElementById('numStrings').value],['Rack Rows',document.getElementById('numRows').value],['Fan Wall Units',document.getElementById('numFanWalls').value],['Distribution Mode',mode],['UPS Configuration',document.getElementById('upsMode').value],['UPS Charging %',document.getElementById('upsCharge').value],['UPS Losses %',document.getElementById('upsLoss').value],['Power Factor',document.getElementById('pf').value],['Distribution Loss %',document.getElementById('infraLoss').value],['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
+    ['Parameter','Value'],['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],['Power Strings',document.getElementById('numStrings').value],['Rack Rows',document.getElementById('numRows').value],['Fan Wall Units',document.getElementById('numFanWalls').value],['Distribution Mode',mode],['UPS Configuration',document.getElementById('upsMode').value],['UPS Charging %',document.getElementById('upsCharge').value],['UPS Losses %',document.getElementById('upsLoss').value],['Generator Power Factor',document.getElementById('genPf').value],['UPS Power Factor',document.getElementById('upsPf').value],['Transformer Power Factor',document.getElementById('txPf').value],['Distribution Loss %',document.getElementById('infraLoss').value],['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
   ]);
   var rowHdr=['Row','Load (kW)','Racks'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
   var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,rowRacks[r]||22,allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
   var otherRows=[['String','Chiller Electrical Load (kW)','Misc (kW)','Total (kW)']];for(var j=0;j<strings.length;j++){var od=otherData[j]||{mech:0,pumps:0,misc:0};otherRows.push([strings[j],od.mech,od.misc,od.mech+od.misc]);}addCsvSection(lines,'Other Loads',otherRows);
   var fanWallRows=[['Unit','Load (kW)','Primary String','Secondary String']];for(var fw=0;fw<fanWallData.length;fw++)fanWallRows.push(['FW-'+(fw+1),fanWallData[fw].load,fanWallData[fw].primary,fanWallData[fw].secondary]);addCsvSection(lines,'Fan Wall Units',fanWallRows);
   var mechUpsRows=[['String','Other Mech UPS Load (kW)']];for(var mj=0;mj<strings.length;mj++){var mod=otherData[mj]||{mech:0,pumps:0,misc:0};mechUpsRows.push([strings[mj],mod.pumps]);}addCsvSection(lines,'Mech UPS Loads',mechUpsRows);
-  var normalRows=[['String','IT Load (kW)','Other Load (kW)','IT UPS Output (kW)','IT UPS Input (kW)','Mech UPS Output (kW)','Mech UPS Input (kW)','Gen Load (kW)','Gen (kVA)']];
+  var normalRows=[['String','IT Load (kW)','Other Load (kW)','IT UPS Output (kW)','IT UPS Input (kW)','UPS (kVA)','Mech UPS Output (kW)','Mech UPS Input (kW)','Gen Load (kW)','Gen (kVA)']];
   var normalIT=scenarios['Normal'];var upsMode=document.getElementById('upsMode').value;
   for(var n=0;n<strings.length;n++){
     var s=strings[n],it=normalIT[s]||0,od=otherData[n]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc),fanWallLoad=fanWallScenarios['Normal'][s]||0,mechUpsTotal=fanWallLoad+od.pumps;
-    var mainUpsOut=upsMode==='combined'?(it+mechUpsTotal):it,upsBase=mainUpsOut*(1+infraL),mainUpsIn=upsBase*(1+chg+loss),mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=mainUpsIn+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
-    normalRows.push([s,it.toFixed(1),oth.toFixed(1),mainUpsOut.toFixed(1),mainUpsIn.toFixed(1),mechUpsOut.toFixed(1),mechUpsIn.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
+    var mainUpsOut=upsMode==='combined'?(it+mechUpsTotal):it,upsBase=mainUpsOut*(1+infraL),mainUpsIn=upsBase*(1+chg+loss),upsKva=mainUpsIn/upsPf,mechUpsOut=upsMode==='separate'?mechUpsTotal:0,mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0,genBase=mainUpsIn+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/genPf;
+    normalRows.push([s,it.toFixed(1),oth.toFixed(1),mainUpsOut.toFixed(1),mainUpsIn.toFixed(1),upsKva.toFixed(1),mechUpsOut.toFixed(1),mechUpsIn.toFixed(1),gk.toFixed(1),gv.toFixed(1)]);
   }
   addCsvSection(lines,'Normal Operation Summary',normalRows);
   var matrixRows=[['String','Normal'].concat(strings.map(function(s){return s+' Fails';})).concat(['Worst Case','Worst Scenario'])];var worstPerString={};
@@ -713,10 +722,10 @@ function exportCSV(){
     worstPerString[ss]={val:best,scen:bestS};row.push(best.toFixed(1),bestS);matrixRows.push(row);
   }
   addCsvSection(lines,'Failure Scenario Matrix',matrixRows);
-  var sizingRows=[['String','Worst UPS Out (kW)','UPS Input (kW)','Gen (kW)','Gen (kVA)','Transformer (kVA)','Scenario']];
+  var sizingRows=[['String','Worst UPS Out (kW)','UPS Input (kW)','UPS (kVA)','Gen (kW)','Gen (kVA)','Transformer Calc (kVA)','Transformer Std (kVA)','Scenario']];
   for(var z=0;z<strings.length;z++){
-    var st=strings[z],w=worstPerString[st],od=otherData[z]||{mech:0,pumps:0,misc:0},othl=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][st])||0,mechUpsTotal=fanWallLoad+od.pumps,wuo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,wui=wuo*(1+infraL)*(1+chg+loss),wMechUpsIn=upsMode==='separate'&&mechUpsTotal>0?mechUpsTotal*(1+infraL)*(1+chg+loss):0,wgk=(wui+wMechUpsIn+othl)*(1+infraL),wgv=wgk/pf,txL=wgv,txRt=txR.length?txR[txR.length-1]:'';
-    for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}sizingRows.push([st,wuo.toFixed(1),wui.toFixed(1),wgk.toFixed(1),wgv.toFixed(1),txRt,w.scen]);
+    var st=strings[z],w=worstPerString[st],od=otherData[z]||{mech:0,pumps:0,misc:0},othl=(od.mech+od.misc),fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][st])||0,mechUpsTotal=fanWallLoad+od.pumps,wuo=upsMode==='combined'?(w.val+mechUpsTotal):w.val,wui=wuo*(1+infraL)*(1+chg+loss),wukva=wui/upsPf,wMechUpsIn=upsMode==='separate'&&mechUpsTotal>0?mechUpsTotal*(1+infraL)*(1+chg+loss):0,wgk=(wui+wMechUpsIn+othl)*(1+infraL),wgv=wgk/genPf,txCalc=wgk/txPf,txRt=txR.length?txR[txR.length-1]:'';
+    for(var t=0;t<txR.length;t++){if(txR[t]>=txCalc){txRt=txR[t];break;}}sizingRows.push([st,wuo.toFixed(1),wui.toFixed(1),wukva.toFixed(1),wgk.toFixed(1),wgv.toFixed(1),txCalc.toFixed(1),txRt,w.scen]);
   }
   addCsvSection(lines,'Equipment Sizing',sizingRows);
   var blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dc-failure-scenario-report.csv';a.click();
@@ -725,7 +734,7 @@ function importXML(file){
   var reader=new FileReader();reader.onload=function(e){try{
     var doc=new DOMParser().parseFromString(e.target.result,'text/xml');var p=doc.querySelector('params');
     if(p){var gv=function(t){var el=p.querySelector(t);return el?el.textContent:'';};
-      var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','pf','infraLoss','txRatings','upsMode'];
+      var ids=['itLoad','loadUnit','numStrings','numRows','numFanWalls','upsCharge','upsLoss','genPf','infraLoss','txRatings','upsMode','upsPf','txPf'];
       for(var i=0;i<ids.length;i++){var v=gv(ids[i]);if(v)document.getElementById(ids[i]).value=v;}
       if(!gv('numFanWalls'))document.getElementById('numFanWalls').value='0';
       if(!gv('upsMode'))document.getElementById('upsMode').value='separate';
@@ -798,7 +807,9 @@ function runMultiScenario(scenarioLoads){
   var strings=gs();
   var chg=parseFloat(document.getElementById('upsCharge').value)/100;
   var loss=parseFloat(document.getElementById('upsLoss').value)/100;
-  var pf=parseFloat(document.getElementById('pf').value);
+  var genPf=parseFloat(document.getElementById('genPf').value);
+  var upsPf=parseFloat(document.getElementById('upsPf').value);
+  var txPf=parseFloat(document.getElementById('txPf').value);
   var infraL=parseFloat(document.getElementById('infraLoss').value)/100;
   var upsMode=document.getElementById('upsMode').value;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
@@ -838,7 +849,7 @@ function runMultiScenario(scenarioLoads){
         mechWorst[ms]={val:mbest,scen:mbestS};
       }
     }
-    var critUpsOut=0,critUpsIn=0,critGen=0,critTx=0,critScen='',critUpsStr='',critGenStr='';
+    var critUpsOut=0,critUpsIn=0,critUpsKva=0,critGen=0,critTxCalc=0,critTx=0,critScen='',critUpsStr='',critGenStr='';
     var critMechOut=0,critMechIn=0,critMechScen='',critMechStr='';
     var totalIT=0;for(var ti=0;ti<rowLoads.length;ti++)totalIT+=rowLoads[ti];
     for(var zi=0;zi<strings.length;zi++){
@@ -849,15 +860,15 @@ function runMultiScenario(scenarioLoads){
       var upsBase=uo*(1+infraL),ui=upsBase*(1+chg+loss);
       var mechUpsOut=upsMode==='separate'?mechUpsTotal:0;
       var mechUpsIn=mechUpsOut>0?mechUpsOut*(1+infraL)*(1+chg+loss):0;
-      var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/pf;
-      var txL=gv,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txL){txRt=txR[t];break;}}
-      if(ui>critUpsIn){critUpsOut=uo;critUpsIn=ui;critScen=w.scen;critUpsStr=s;}
-      if(gv>critGen){critGen=gv;critTx=txRt;critGenStr=s;}
+      var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/genPf;
+      var txCalc=gk/txPf,txRt=txR[txR.length-1];for(var t=0;t<txR.length;t++){if(txR[t]>=txCalc){txRt=txR[t];break;}}
+      if(ui>critUpsIn){critUpsOut=uo;critUpsIn=ui;critUpsKva=ui/upsPf;critScen=w.scen;critUpsStr=s;}
+      if(gv>critGen){critGen=gv;critTxCalc=txCalc;critTx=txRt;critGenStr=s;}
       var mw=mechWorst[s]||{val:0,scen:'Normal'};
       var mwIn=mw.val>0?mw.val*(1+infraL)*(1+chg+loss):0;
       if(mwIn>critMechIn){critMechOut=mw.val;critMechIn=mwIn;critMechScen=mw.scen;critMechStr=s;}
     }
-    results.push({name:sc.name,totalIT:totalIT,critScen:critScen,critUpsStr:critUpsStr,critUpsOut:critUpsOut,critUpsIn:critUpsIn,critGenStr:critGenStr,critGen:critGen,critTx:critTx,critMechStr:critMechStr,critMechOut:critMechOut,critMechIn:critMechIn,upsMode:upsMode});
+    results.push({name:sc.name,totalIT:totalIT,critScen:critScen,critUpsStr:critUpsStr,critUpsOut:critUpsOut,critUpsIn:critUpsIn,critUpsKva:critUpsKva,critGenStr:critGenStr,critGen:critGen,critTxCalc:critTxCalc,critTx:critTx,critMechStr:critMechStr,critMechOut:critMechOut,critMechIn:critMechIn,upsMode:upsMode});
   }
   rowLoads=savedLoads;
   allocData=savedAlloc;
@@ -870,9 +881,11 @@ function runMultiScenario(scenarioLoads){
     {label:'Critical UPS String',fn:function(r){return r.critUpsStr;}},
     {label:'Max UPS Output (kW)',fn:function(r){return fmt(r.critUpsOut);}},
     {label:'Max UPS Input (kW)',fn:function(r){return fmt(r.critUpsIn);}},
+    {label:'UPS (kVA)',fn:function(r){return fmt(r.critUpsKva);}},
     {label:'Critical Gen String',fn:function(r){return r.critGenStr;}},
     {label:'Max Generator (kVA)',fn:function(r){return fmt(r.critGen);}},
-    {label:'Transformer (kVA)',fn:function(r){return r.critTx;}}
+    {label:'Transformer Calc (kVA)',fn:function(r){return fmt(r.critTxCalc);}},
+    {label:'Transformer Std (kVA)',fn:function(r){return r.critTx;}}
   ];
   if(results[0]&&results[0].upsMode==='separate'){
     metrics.splice(5,0,
@@ -881,7 +894,7 @@ function runMultiScenario(scenarioLoads){
       {label:'Max Mech UPS Input (kW)',fn:function(r){return r.critMechIn>0?fmt(r.critMechIn):'\u2014';}}
     );
   }
-  var numericMetrics={'Total IT Load (kW)':true,'Max UPS Output (kW)':true,'Max UPS Input (kW)':true,'Max Generator (kVA)':true,'Transformer (kVA)':true,'Max Mech UPS Output (kW)':true,'Max Mech UPS Input (kW)':true};
+  var numericMetrics={'Total IT Load (kW)':true,'Max UPS Output (kW)':true,'Max UPS Input (kW)':true,'UPS (kVA)':true,'Max Generator (kVA)':true,'Transformer Calc (kVA)':true,'Transformer Std (kVA)':true,'Max Mech UPS Output (kW)':true,'Max Mech UPS Input (kW)':true};
   var bhtml='';var scenarioTableData=[];
   for(var m=0;m<metrics.length;m++){
     bhtml+='<tr><td><strong>'+metrics[m].label+'</strong></td>';
