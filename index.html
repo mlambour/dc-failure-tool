@@ -395,15 +395,23 @@ function rackSplitForRow(rowIdx,r){
       result[r.c]=rightPair[0]*kWperRack;result[r.d]=rightPair[1]*kWperRack;
     }
   }else{
-    var base=Math.floor(racks/4),rem=racks%4;
-    var groups=[base,base,base,base];
-    var order=rowIdx%2===0?[0,3,1,2]:[1,2,0,3];
-    for(var gr=0;gr<rem;gr++)groups[order[gr]]++;
-    var groupFeeds=[r.a,r.b,r.c,r.d];
-    for(var gi=0;gi<4;gi++){
-      var gLoad=groups[gi]*kWperRack;
-      result[groupFeeds[gi]]=(result[groupFeeds[gi]]||0)+gLoad/2;
-      result[r.e]=(result[r.e]||0)+gLoad/2;
+    var ft=rowFeedType[rowIdx]||'dual';
+    if(ft==='quad4s'){
+      var halves=splitRacks(racks,2,rowIdx);
+      var leftLoad=halves[0]*kWperRack,rightLoad=halves[1]*kWperRack;
+      result[r.a]=(result[r.a]||0)+leftLoad/3;result[r.b]=(result[r.b]||0)+leftLoad/3;result[r.e]=(result[r.e]||0)+leftLoad/3;
+      result[r.c]=(result[r.c]||0)+rightLoad/3;result[r.d]=(result[r.d]||0)+rightLoad/3;result[r.e]=(result[r.e]||0)+rightLoad/3;
+    }else{
+      var base=Math.floor(racks/4),rem=racks%4;
+      var groups=[base,base,base,base];
+      var order=rowIdx%2===0?[0,3,1,2]:[1,2,0,3];
+      for(var gr=0;gr<rem;gr++)groups[order[gr]]++;
+      var groupFeeds=[r.a,r.b,r.c,r.d];
+      for(var gi=0;gi<4;gi++){
+        var gLoad=groups[gi]*kWperRack;
+        result[groupFeeds[gi]]=(result[groupFeeds[gi]]||0)+gLoad/2;
+        result[r.e]=(result[r.e]||0)+gLoad/2;
+      }
     }
   }
   return result;
@@ -510,13 +518,33 @@ function calcIT(failString){
         if(failString===r.c)load[r.d]+=rightLoad;else if(failString===r.d)load[r.c]+=rightLoad;else{load[r.c]+=(rs[r.c]||0);load[r.d]+=(rs[r.d]||0);}
       }
     }else{
-      var racks=rowRacks[i]||22,kWperRack=r.load/racks,base=Math.floor(racks/4),rem=racks%4,groups=[base,base,base,base],order=i%2===0?[0,3,1,2]:[1,2,0,3],feeds=[r.a,r.b,r.c,r.d],catcher=r.e;
-      for(var gr=0;gr<rem;gr++)groups[order[gr]]++;
-      for(var gi=0;gi<4;gi++){
-        var gLoad=groups[gi]*kWperRack,active=feeds[gi];
-        if(failString===active)load[catcher]+=gLoad;
-        else if(failString===catcher)load[active]+=gLoad;
-        else{load[active]+=gLoad/2;load[catcher]+=gLoad/2;}
+      var ft=rowFeedType[i]||'dual';
+      if(ft==='quad4s'){
+        var racks=rowRacks[i]||22,kWperRack=r.load/racks;
+        var halves=splitRacks(racks,2,i);
+        var leftLoad=halves[0]*kWperRack,rightLoad=halves[1]*kWperRack;
+        var leftFeeds=[r.a,r.b,r.e],rightFeeds=[r.c,r.d,r.e];
+        if(failString&&leftFeeds.indexOf(failString)>=0){
+          var lSurv=leftFeeds.filter(function(f){return f!==failString;});
+          for(var li=0;li<lSurv.length;li++)load[lSurv[li]]+=leftLoad/2;
+        }else{
+          for(var li=0;li<leftFeeds.length;li++)load[leftFeeds[li]]+=leftLoad/3;
+        }
+        if(failString&&rightFeeds.indexOf(failString)>=0){
+          var rSurv=rightFeeds.filter(function(f){return f!==failString;});
+          for(var ri2=0;ri2<rSurv.length;ri2++)load[rSurv[ri2]]+=rightLoad/2;
+        }else{
+          for(var ri2=0;ri2<rightFeeds.length;ri2++)load[rightFeeds[ri2]]+=rightLoad/3;
+        }
+      }else{
+        var racks=rowRacks[i]||22,kWperRack=r.load/racks,base=Math.floor(racks/4),rem=racks%4,groups=[base,base,base,base],order=i%2===0?[0,3,1,2]:[1,2,0,3],feeds=[r.a,r.b,r.c,r.d],catcher=r.e;
+        for(var gr=0;gr<rem;gr++)groups[order[gr]]++;
+        for(var gi=0;gi<4;gi++){
+          var gLoad=groups[gi]*kWperRack,active=feeds[gi];
+          if(failString===active)load[catcher]+=gLoad;
+          else if(failString===catcher)load[active]+=gLoad;
+          else{load[active]+=gLoad/2;load[catcher]+=gLoad/2;}
+        }
       }
     }
   }
