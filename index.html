@@ -728,7 +728,7 @@ function calculate(){
     var upsKva=ui/upsPf;
     var mechUpsKva=mechUpsIn>0?mechUpsIn/upsPf:0;
     var genBase=ui+mechUpsIn+oth,gk=genBase*(1+infraL),gv=gk/genPf;
-    if(upsMode==='combined')nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(upsKva)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
+      if(upsMode==='combined')nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(upsKva)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
     else nhtml+='<tr><td><strong>'+s+'</strong></td><td class="v">'+fmt(it)+'</td><td>'+fmt(oth)+'</td><td class="v">'+fmt(mainUpsOut)+'</td><td>'+fmt(ui)+'</td><td>'+fmt(upsKva)+'</td><td>'+fmt(mechUpsOut)+'</td><td>'+fmt(mechUpsIn)+'</td><td>'+fmt(mechUpsKva)+'</td><td class="v">'+fmt(gk)+'</td><td>'+fmt(gv)+'</td></tr>';
   }
   nb.innerHTML=nhtml;
@@ -867,6 +867,24 @@ function calculate(){
     if(dup){warnings.push({level:'high',title:'Duplicate Feed Selection Detected',text:'Row '+(wr+1)+' contains duplicate string assignments. Review busbar selections.'});break;}
   }
   for(var fw=0;fw<fanWallData.length;fw++)if(fanWallData[fw].primary===fanWallData[fw].secondary){warnings.push({level:'med',title:'Fan Wall Primary/Secondary Match',text:'Fan wall FW-'+(fw+1)+' has the same primary and secondary string. Review if transfer redundancy is intended.'});break;}
+
+  // Separated topology: mech validation warnings
+  if(topology==='separated'){
+    var mStrs=mgs(),mechNormalLoads={};
+    for(var mi=0;mi<mStrs.length;mi++){mechNormalLoads[mStrs[mi]]=mechOtherData[mi].chiller+mechOtherData[mi].mechUps;}
+    var mechMin=Math.min.apply(null,Object.values(mechNormalLoads)),mechMax=Math.max.apply(null,Object.values(mechNormalLoads));
+    var mechImb=mechMin>0?((mechMax-mechMin)/mechMin*100):0;
+    if(mechImb>10)warnings.push({level:'med',title:'High Mech Load Imbalance',text:'Mech chiller + UPS load imbalance is '+fmtD(mechImb)+'%. Consider rebalancing ATS backup assignments.'});
+    // Check for ATS backup loops (A→B→C→A) and unreachable backups
+    for(var mci=0;mci<mechOtherData.length;mci++){
+      var mc=mechOtherData[mci],primary=mStrs[mci],backup=mc.atsBackup;
+      if(!backup||mStrs.indexOf(backup)<0){warnings.push({level:'high',title:'Invalid Mech ATS Backup',text:'Mech string '+primary+' has no valid ATS backup. Select an available mech string.'});break;}
+    }
+    for(var mfw=0;mfw<mechFanWallData.length;mfw++){
+      var mfwd=mechFanWallData[mfw];
+      if(mStrs.indexOf(mfwd.primary)<0||mStrs.indexOf(mfwd.secondary)<0){warnings.push({level:'high',title:'Invalid Mech Fan Wall String Reference',text:'Mech fan wall MFW-'+(mfw+1)+' references invalid mech string. Regenerate fan walls after changing mech string count.'});break;}
+    }
+  }
 
   var wb=document.getElementById('warningBox');
   if(warnings.length===0)wb.innerHTML='<div class="warn warn-low"><strong>No validation warnings</strong>Inputs and allocation passed the current validation checks.</div>';
@@ -1301,6 +1319,25 @@ function printScenarioReport(){
   w.document.close();w.print();
 }
 
+function printSeparatedMechReport(){
+  var wrap=document.getElementById('separatedMechResults');
+  if(!wrap||wrap.style.display==='none'){alert('Separated topology results not available.');return;}
+  var w=window.open('','_blank');
+  w.document.write('<html><head><title>Separated Mechanical Topology Report</title><style>body{font-family:Segoe UI,system-ui,sans-serif;padding:20px;color:#222}h1{color:#0077b6;border-bottom:2px solid #0077b6;padding-bottom:10px}h2{color:#0077b6;margin-top:20px}table{width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:20px}th{background:#eee;padding:8px;text-align:left;border:1px solid #ccc;font-weight:700}td{padding:8px;border:1px solid #ccc}.v{font-weight:700;color:#0077b6}.cr{color:#d32f2f;font-weight:700}.tg{display:inline-block;padding:2px 6px;border-radius:3px;font-size:0.75rem;font-weight:700;margin-left:4px}.tc{background:#ffebee;color:#d32f2f}.sumbox{background:#f5f5f5;padding:12px;margin-bottom:16px;border-radius:6px;border-left:4px solid #0077b6}.sumbox strong{color:#0077b6}</style></head><body>');
+  w.document.write('<h1>⚙️ Separated Mechanical Topology Report</h1>');
+  w.document.write('<div class="sumbox"><strong>Mech Strings:</strong> '+mechNStrings+' | <strong>Fan Wall Units:</strong> '+mechFanWallData.length+' | <strong>Topology:</strong> Separated (Independent Mech Bank)</div>');
+  w.document.write('<h2>Mech Normal Operation Summary</h2>');
+  w.document.write(document.getElementById('mechNormalBody').closest('table').outerHTML);
+  w.document.write('<h2>Mech UPS Failure Scenario Matrix</h2>');
+  w.document.write(document.getElementById('sepMechMatrixBody').closest('table').outerHTML);
+  w.document.write('<h2>Mech Generator Failure Scenario Matrix</h2>');
+  w.document.write(document.getElementById('sepMechGenMatrixBody').closest('table').outerHTML);
+  w.document.write('<h2>Mech Equipment Sizing</h2>');
+  w.document.write(document.getElementById('sepMechSizingBody').closest('table').outerHTML);
+  w.document.write('</body></html>');
+  w.document.close();w.print();
+}
+
 function exportScenarioXlsx(){
   if(!window._scenarioTableData||window._scenarioTableData.length===0){alert('Run scenarios first.');return;}
   var wb=XLSX.utils.book_new();
@@ -1322,6 +1359,8 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnExportCsv').addEventListener('click',exportCSV);
   document.getElementById('distMode').addEventListener('change',function(){document.getElementById('modeDesc').textContent=MODES[this.value];if(this.value==='hex'){var ns=document.getElementById('numStrings');if(parseInt(ns.value)<6){ns.value=6;}}});
   document.getElementById('btnExport').addEventListener('click',exportXML);
+  // Also add print mech button to results section if separated
+  setTimeout(function(){var printMechBtn2=document.getElementById('btnPrintMech');if(!printMechBtn2){var btn=document.createElement('button');btn.className='btn bs';btn.id='btnPrintMech';btn.textContent='📄 Print Mech Report';btn.addEventListener('click',printSeparatedMechReport);var resultsBr=document.querySelector('#results .br');if(resultsBr)resultsBr.insertBefore(btn,resultsBr.firstChild);}},100);
   document.getElementById('btnImport').addEventListener('click',function(){document.getElementById('fileInput').click();});
   document.getElementById('fileInput').addEventListener('change',function(e){if(e.target.files[0])importXML(e.target.files[0]);e.target.value='';});
   document.getElementById('btnScenarioExport').addEventListener('click',exportScenarioTemplate);
@@ -1329,6 +1368,14 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('scenarioFileInput').addEventListener('change',function(e){if(e.target.files[0])importScenarioFile(e.target.files[0]);e.target.value='';});
   document.getElementById('btnScenarioPrint').addEventListener('click',printScenarioReport);
   document.getElementById('btnScenarioXlsx').addEventListener('click',exportScenarioXlsx);
+  // Add print mech button dynamically if separated
+  var printMechBtn=document.createElement('button');
+  printMechBtn.className='btn bs';
+  printMechBtn.id='btnPrintMech';
+  printMechBtn.textContent='📄 Print Mech Report';
+  printMechBtn.addEventListener('click',printSeparatedMechReport);
+  var mechBlock=document.getElementById('separatedMechResults');
+  if(mechBlock){var brDiv=mechBlock.querySelector('.br')||mechBlock.parentElement.querySelector('.br');if(brDiv)brDiv.appendChild(printMechBtn);}
   document.getElementById('topology').addEventListener('change',onTopologyChange);
   document.getElementById('mechNumStrings').addEventListener('change',resizeMech);
   document.getElementById('numFanWalls').addEventListener('change',function(){if(topology==='separated')resizeMechFanWalls();});
