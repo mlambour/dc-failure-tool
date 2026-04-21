@@ -261,6 +261,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 <div id="scenarioResults" style="display:none;margin-top:16px">
 <h3 style="color:var(--accent);margin-bottom:10px">📋 Scenario Comparison Summary</h3>
+<div id="scenarioTopoNote" class="nt" style="display:none;margin-bottom:8px">Separated topology detected — mechanical loads are excluded from this comparison. IT UPS / Generator / Transformer sizing only.</div>
 <div class="sx"><table><thead id="scenarioHead"></thead><tbody id="scenarioBody"></tbody></table></div>
 <div class="br" style="margin-top:12px">
 <button class="btn bp bsm" id="btnScenarioPrint">📄 Print Scenario Report</button>
@@ -1178,8 +1179,16 @@ function runMultiScenario(scenarioLoads){
     for(var ri=0;ri<sc.loads.length&&ri<rowLoads.length;ri++){rowLoads[ri]=sc.loads[ri];allocData[ri].load=sc.loads[ri];}
     var scenarios={};scenarios['Normal']=calcIT(null);
     for(var fi=0;fi<strings.length;fi++)scenarios[strings[fi]+' Fails']=calcIT(strings[fi]);
-    var fanWallScenarios={};fanWallScenarios['Normal']=calcFanWallLoads(null);
-    for(var fsi=0;fsi<strings.length;fsi++)fanWallScenarios[strings[fsi]+' Fails']=calcFanWallLoads(strings[fsi]);
+    // In Separated topology, IT comparison excludes all mech contributions
+    var fanWallScenarios={};
+    if(topology==='separated'){
+      fanWallScenarios['Normal']={};for(var fsi=0;fsi<strings.length;fsi++)fanWallScenarios['Normal'][strings[fsi]]=0;
+      for(var fsi=0;fsi<strings.length;fsi++){fanWallScenarios[strings[fsi]+' Fails']={};for(var fsj=0;fsj<strings.length;fsj++)fanWallScenarios[strings[fsi]+' Fails'][strings[fsj]]=0;}
+    }else{
+      fanWallScenarios['Normal']=calcFanWallLoads(null);
+      for(var fsi=0;fsi<strings.length;fsi++)fanWallScenarios[strings[fsi]+' Fails']=calcFanWallLoads(strings[fsi]);
+    }
+    var effOtherScen=topology==='separated'?strings.map(function(){return {mech:0,pumps:0,misc:0};}):otherData;
     var normalIT=scenarios['Normal'];
     var wPS={};
     for(var wi=0;wi<strings.length;wi++){
@@ -1192,7 +1201,8 @@ function runMultiScenario(scenarioLoads){
       wPS[s]={val:best,scen:bestS};
     }
     var mechWorst={};
-    if(upsMode==='separate'){
+    // Only track mech worst case for Combined topology with separate UPS (IT strings carrying mech)
+    if(upsMode==='separate'&&topology!=='separated'){
       for(var mi=0;mi<strings.length;mi++){
         var ms=strings[mi],mbest=0,mbestS='Normal';
         var mkeys=['Normal'];for(var mk=0;mk<strings.length;mk++)mkeys.push(strings[mk]+' Fails');
@@ -1210,7 +1220,7 @@ function runMultiScenario(scenarioLoads){
     var critMechOut=0,critMechIn=0,critMechKva=0,critMechScen='',critMechStr='';
     var totalIT=0;for(var ti=0;ti<rowLoads.length;ti++)totalIT+=rowLoads[ti];
     for(var zi=0;zi<strings.length;zi++){
-      var s=strings[zi],w=wPS[s],od=otherData[zi]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc);
+      var s=strings[zi],w=wPS[s],od=effOtherScen[zi]||{mech:0,pumps:0,misc:0},oth=(od.mech+od.misc);
       var fanWallLoad=(fanWallScenarios[w.scen]&&fanWallScenarios[w.scen][s])||0;
       var mechUpsTotal=fanWallLoad+od.pumps;
       var uo=upsMode==='combined'?(w.val+mechUpsTotal):w.val;
@@ -1245,7 +1255,7 @@ function runMultiScenario(scenarioLoads){
     {label:'Transformer Calc (kVA)',fn:function(r){return fmt(r.critTxCalc);}},
     {label:'Transformer Std (kVA)',fn:function(r){return r.critTx;}}
   ];
-  if(results[0]&&results[0].upsMode==='separate'){
+  if(results[0]&&results[0].upsMode==='separate'&&topology!=='separated'){
     metrics.splice(5,0,
       {label:'Critical Mech UPS String',fn:function(r){return r.critMechStr||'\u2014';}},
       {label:'Max Mech UPS Output (kW)',fn:function(r){return r.critMechOut>0?fmt(r.critMechOut):'\u2014';}},
