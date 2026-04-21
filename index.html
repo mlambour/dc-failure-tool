@@ -121,7 +121,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <div class="cd" id="step2Card">
 <h2><span class="step s2">STEP 2</span> Busbar Distribution & String Allocation</h2>
 <div class="fr">
-<div class="fg"><label>Distribution Mode</label><select id="distMode"><option value="dual">Dual (A/B)</option><option value="triple">Triple (A/B + Catcher)</option><option value="quad">Quad (A/B + C/D)</option><option value="quint">Quint (A/B + C/D + Catcher)</option></select></div>
+<div class="fg"><label>Distribution Mode</label><select id="distMode"><option value="dual">Dual (A/B)</option><option value="triple">Triple (A/B + Catcher)</option><option value="quad">Quad (A/B + C/D)</option><option value="quint">Quint (A/B + C/D + Catcher)</option><option value="hex">Hex (A/B + C/D + Dual Catcher)</option></select></div>
 </div>
 <div id="modeDesc" class="md">Dual: Each row fed by 2 busbars (50/50 split). On failure, surviving busbar takes 100%.</div>
 <div class="br" style="margin-top:10px">
@@ -176,6 +176,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 <li>Triple mode assumes the first rack half is dual-connected across A/C and the second half across B/C, with each connected pair sharing 50/50 in normal operation.</li>
 <li>Quad mode assumes two independent paired paths (A/B and C/D), each redistributing only within its pair.</li>
 <li>Quint mode assumes rack groups are dual-connected across A/E, B/E, C/E and D/E, with each connected pair sharing 50/50 in normal operation.</li>
+<li>Hex mode uses 6 strings with dual catchers (E and F) and always applies Quad (4S) feed. Left half of racks are quad-connected across A/B/E/F; right half across C/D/E/F. Each connected string carries 25% in normal. On failure of any one string, the surviving 3 feeds in that half take 33.3% each.</li>
 <li><strong>Rack Feed Types:</strong> <em>Dual</em> — 2 feeds from assigned strings (default). <em>Quad (2S)</em> — 4 feeds from the same 2 assigned strings (physical redundancy, no calculation change). <em>Quad (4S)</em> — 4 feeds from 4 separate strings; in Quad mode this changes the calculation to 25% per string in normal, with the remaining 3 strings each taking 33.3% on failure. In other modes Quad (4S) behaves like Quad (2S) as racks connect to ≤2 distinct strings.</li>
 <li>Validation warnings are advisory checks only and currently use these thresholds:</li>
 <li><strong>Normal IT load imbalance:</strong> moderate warning above 5%; high warning above 10%.</li>
@@ -224,7 +225,7 @@ td{padding:7px 8px;border-top:1px solid var(--border);text-align:left}
 </div>
 <script>
 var SL='ABCDEFGHIJ',rowLoads=[],rowRacks=[],rowFeedType=[],allocData=[],otherData=[],fanWallData=[],nStrings=5,nRows=10,mode='dual';
-var MODES={dual:'Dual: all racks are dual-connected A/B at 50/50. On failure, survivor takes 100%.',triple:'Triple: first rack half is A/C, second rack half is B/C, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected half.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: rack groups are dual-connected A/E, B/E, C/E and D/E, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected group.'};
+var MODES={dual:'Dual: all racks are dual-connected A/B at 50/50. On failure, survivor takes 100%.',triple:'Triple: first rack half is A/C, second rack half is B/C, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected half.',quad:'Quad: 2 pairs (A/B+C/D), 25% each. Failure transfers within pair only.',quint:'Quint: rack groups are dual-connected A/E, B/E, C/E and D/E, each sharing 50/50 in normal. On failure, the surviving connected string takes 100% of the affected group.',hex:'Hex: 6 strings with dual catchers (E/F). Quad-fed only. Left half A/B/E/F, right half C/D/E/F, each at 25%. On failure, surviving 3 feeds take 33.3% each.'};
 function gs(){return SL.slice(0,nStrings).split('');}
 function getITkW(){var v=parseFloat(document.getElementById('itLoad').value);return document.getElementById('loadUnit').value==='MW'?v*1000:v;}
 function fmt(n){return n>=10?Math.round(n).toLocaleString('en'):n.toFixed(1);}
@@ -308,7 +309,7 @@ function autoAllocate(){
       allocData[ri].c=sorted[2];allocData[ri].d=sorted[3];
       sLoad[sorted[0]]+=q;sLoad[sorted[1]]+=q;sLoad[sorted[2]]+=q;sLoad[sorted[3]]+=q;
     }
-  }else{
+  }else if(mode==='quint'){
     var catchCount={};for(var i=0;i<strings.length;i++)catchCount[strings[i]]=0;
     for(var k=0;k<indexed.length;k++){
       var ri=indexed[k].idx;var rl=indexed[k].load;var q=rl/4;
@@ -318,6 +319,17 @@ function autoAllocate(){
       var ce=cSorted.length>0?cSorted[0]:sorted[4];
       allocData[ri].a=fa;allocData[ri].b=fb;allocData[ri].c=fc;allocData[ri].d=fd;allocData[ri].e=ce;
       sLoad[fa]+=q;sLoad[fb]+=q;sLoad[fc]+=q;sLoad[fd]+=q;catchCount[ce]++;
+    }
+  }else if(mode==='hex'){
+    var catchCount={};for(var i=0;i<strings.length;i++)catchCount[strings[i]]=0;
+    for(var k=0;k<indexed.length;k++){
+      var ri=indexed[k].idx;var rl=indexed[k].load;var q=rl/4;
+      var sorted=strings.slice().sort(function(a,b){return sLoad[a]-sLoad[b];});
+      var fa=sorted[0],fb=sorted[1],fc=sorted[2],fd=sorted[3];
+      var catchers=strings.slice().filter(function(x){return x!==fa&&x!==fb&&x!==fc&&x!==fd;}).sort(function(a,b){return catchCount[a]-catchCount[b];});
+      var ce=catchers[0]||sorted[4],cf=catchers[1]||sorted[5];
+      allocData[ri].a=fa;allocData[ri].b=fb;allocData[ri].c=fc;allocData[ri].d=fd;allocData[ri].e=ce;allocData[ri].f=cf;
+      sLoad[fa]+=q;sLoad[fb]+=q;sLoad[fc]+=q;sLoad[fd]+=q;catchCount[ce]++;catchCount[cf]++;
     }
   }
   renderAllocTable(sLoad);
@@ -340,7 +352,8 @@ function renderAllocTable(sLoad){
   if(mode==='dual')hh+='<th>Primary</th><th>Backup</th>';
   else if(mode==='triple')hh+='<th>Primary</th><th>Secondary</th><th>Catcher</th>';
   else if(mode==='quad')hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th>';
-  else hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th><th>Catcher</th>';
+  else if(mode==='quint')hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th><th>Catcher</th>';
+  else hh+='<th>Feed A</th><th>Feed B</th><th>Feed C</th><th>Feed D</th><th>Catcher E</th><th>Catcher F</th>';
   hh+='</tr>';ah.innerHTML=hh;
   var ab=document.getElementById('allocBody');var html='';
   for(var i=0;i<allocData.length;i++){
@@ -351,6 +364,7 @@ function renderAllocTable(sLoad){
     if(mode==='triple')html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';
     if(mode==='quad'){html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="d">'+selO(strings,r.d)+'</select></td>';}
     if(mode==='quint'){html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="d">'+selO(strings,r.d)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="e">'+selO(strings,r.e)+'</select></td>';}
+    if(mode==='hex'){html+='<td><select data-ai="'+i+'" data-f="c">'+selO(strings,r.c)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="d">'+selO(strings,r.d)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="e">'+selO(strings,r.e)+'</select></td>';html+='<td><select data-ai="'+i+'" data-f="f">'+selO(strings,r.f||'F')+'</select></td>';}
     html+='</tr>';
   }
   ab.innerHTML=html;
@@ -394,7 +408,7 @@ function rackSplitForRow(rowIdx,r){
       result[r.a]=leftPair[0]*kWperRack;result[r.b]=leftPair[1]*kWperRack;
       result[r.c]=rightPair[0]*kWperRack;result[r.d]=rightPair[1]*kWperRack;
     }
-  }else{
+  }else if(mode==='quint'){
     var ft=rowFeedType[rowIdx]||'dual';
     if(ft==='quad4s'){
       var halves=splitRacks(racks,2,rowIdx);
@@ -413,6 +427,13 @@ function rackSplitForRow(rowIdx,r){
         result[r.e]=(result[r.e]||0)+gLoad/2;
       }
     }
+  }else if(mode==='hex'){
+    var halves=splitRacks(racks,2,rowIdx);
+    var leftLoad=halves[0]*kWperRack,rightLoad=halves[1]*kWperRack;
+    result[r.a]=(result[r.a]||0)+leftLoad/4;result[r.b]=(result[r.b]||0)+leftLoad/4;
+    result[r.e]=(result[r.e]||0)+leftLoad/4;result[r.f]=(result[r.f]||0)+leftLoad/4;
+    result[r.c]=(result[r.c]||0)+rightLoad/4;result[r.d]=(result[r.d]||0)+rightLoad/4;
+    result[r.e]=(result[r.e]||0)+rightLoad/4;result[r.f]=(result[r.f]||0)+rightLoad/4;
   }
   return result;
 }
@@ -517,7 +538,7 @@ function calcIT(failString){
         if(failString===r.a)load[r.b]+=leftLoad;else if(failString===r.b)load[r.a]+=leftLoad;else{load[r.a]+=(rs[r.a]||0);load[r.b]+=(rs[r.b]||0);}
         if(failString===r.c)load[r.d]+=rightLoad;else if(failString===r.d)load[r.c]+=rightLoad;else{load[r.c]+=(rs[r.c]||0);load[r.d]+=(rs[r.d]||0);}
       }
-    }else{
+    }else if(mode==='quint'){
       var ft=rowFeedType[i]||'dual';
       if(ft==='quad4s'){
         var racks=rowRacks[i]||22,kWperRack=r.load/racks;
@@ -545,6 +566,23 @@ function calcIT(failString){
           else if(failString===catcher)load[active]+=gLoad;
           else{load[active]+=gLoad/2;load[catcher]+=gLoad/2;}
         }
+      }
+    }else if(mode==='hex'){
+      var racks=rowRacks[i]||22,kWperRack=r.load/racks;
+      var halves=splitRacks(racks,2,i);
+      var leftLoad=halves[0]*kWperRack,rightLoad=halves[1]*kWperRack;
+      var leftFeeds=[r.a,r.b,r.e,r.f],rightFeeds=[r.c,r.d,r.e,r.f];
+      if(failString&&leftFeeds.indexOf(failString)>=0){
+        var lSurv=leftFeeds.filter(function(f){return f!==failString;});
+        for(var li=0;li<lSurv.length;li++)load[lSurv[li]]+=leftLoad/3;
+      }else{
+        for(var li=0;li<leftFeeds.length;li++)load[leftFeeds[li]]+=leftLoad/4;
+      }
+      if(failString&&rightFeeds.indexOf(failString)>=0){
+        var rSurv=rightFeeds.filter(function(f){return f!==failString;});
+        for(var ri2=0;ri2<rSurv.length;ri2++)load[rSurv[ri2]]+=rightLoad/3;
+      }else{
+        for(var ri2=0;ri2<rightFeeds.length;ri2++)load[rightFeeds[ri2]]+=rightLoad/4;
       }
     }
   }
@@ -591,7 +629,7 @@ function calculate(){
   for(var ri=0;ri<allocData.length;ri++){
     var rr=allocData[ri],rs=rackSplitForRow(ri,rr);
     rdBody+='<tr><td>'+(ri+1)+'</td><td class="v">'+fmt(rr.load)+'</td><td>'+(rowRacks[ri]||22)+'</td><td>'+({'dual':'Dual','quad2s':'Quad (2S)','quad4s':'Quad (4S)'}[rowFeedType[ri]||'dual']||'Dual')+'</td>';
-    var catcherStr='';if(mode==='triple')catcherStr=rr.c;else if(mode==='quint')catcherStr=rr.e;
+    var catcherStr='';if(mode==='triple')catcherStr=rr.c;else if(mode==='quint')catcherStr=rr.e;else if(mode==='hex'){catcherStr=rr.e;}
     for(var si=0;si<strings.length;si++){var sv=rs[strings[si]]||0;if(sv>0)rdBody+='<td>'+fmt(sv)+'</td>';else if(strings[si]===catcherStr)rdBody+='<td style="color:#555">— <span style="font-size:0.75rem;color:var(--text2)">(Catcher)</span></td>';else rdBody+='<td style="color:#555">—</td>';}
     rdBody+='</tr>';
   }
@@ -705,7 +743,7 @@ function calculate(){
   if(txR.length===0)warnings.push({level:'high',title:'No Valid Transformer Ratings',text:'Transformer ratings list is empty or invalid, so sizing selection may be unreliable.'});
 
   for(var wr=0;wr<allocData.length;wr++){
-    var rr=allocData[wr],feeds=[];if(rr.a)feeds.push(rr.a);if(rr.b)feeds.push(rr.b);if(rr.c)feeds.push(rr.c);if(rr.d)feeds.push(rr.d);if(rr.e)feeds.push(rr.e);
+    var rr=allocData[wr],feeds=[];if(rr.a)feeds.push(rr.a);if(rr.b)feeds.push(rr.b);if(rr.c)feeds.push(rr.c);if(rr.d)feeds.push(rr.d);if(rr.e)feeds.push(rr.e);if(rr.f)feeds.push(rr.f);
     var uniq={};var dup=false;for(var wu=0;wu<feeds.length;wu++){if(uniq[feeds[wu]]){dup=true;break;}uniq[feeds[wu]]=true;}
     if(dup){warnings.push({level:'high',title:'Duplicate Feed Selection Detected',text:'Row '+(wr+1)+' contains duplicate string assignments. Review busbar selections.'});break;}
   }
@@ -751,8 +789,9 @@ function exportCSV(){
   addCsvSection(lines,'System Parameters',[
     ['Parameter','Value'],['IT Load',document.getElementById('itLoad').value+' '+document.getElementById('loadUnit').value],['Power Strings',document.getElementById('numStrings').value],['Rack Rows',document.getElementById('numRows').value],['Fan Wall Units',document.getElementById('numFanWalls').value],['Distribution Mode',mode],['UPS Configuration',document.getElementById('upsMode').value],['UPS Charging %',document.getElementById('upsCharge').value],['UPS Losses %',document.getElementById('upsLoss').value],['Generator Power Factor',document.getElementById('genPf').value],['UPS Power Factor',document.getElementById('upsPf').value],['Transformer Power Factor',document.getElementById('txPf').value],['Distribution Loss %',document.getElementById('infraLoss').value],['Transformer Ratings (kVA)',document.getElementById('txRatings').value]
   ]);
-  var rowHdr=['Row','Load (kW)','Racks','Feed Type'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
-  var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,rowRacks[r]||22,({'dual':'Dual','quad2s':'Quad (2S)','quad4s':'Quad (4S)'}[rowFeedType[r]||'dual']||'Dual'),allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
+  var rowHdr=['Row','Load (kW)','Racks','Feed Type'];if(mode==='dual')rowHdr=rowHdr.concat(['Primary','Backup']);else if(mode==='triple')rowHdr=rowHdr.concat(['Primary','Secondary','Catcher']);else if(mode==='quad')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D']);else if(mode==='quint')rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher']);
+  else rowHdr=rowHdr.concat(['Feed A','Feed B','Feed C','Feed D','Catcher E','Catcher F']);
+  var rowRows=[rowHdr];for(var r=0;r<allocData.length;r++){var ar=[r+1,allocData[r].load,rowRacks[r]||22,({'dual':'Dual','quad2s':'Quad (2S)','quad4s':'Quad (4S)'}[rowFeedType[r]||'dual']||'Dual'),allocData[r].a,allocData[r].b];if(mode==='triple')ar.push(allocData[r].c);if(mode==='quad')ar.push(allocData[r].c,allocData[r].d);if(mode==='quint')ar.push(allocData[r].c,allocData[r].d,allocData[r].e);if(mode==='hex')ar.push(allocData[r].c,allocData[r].d,allocData[r].e,allocData[r].f);rowRows.push(ar);}addCsvSection(lines,'Row Allocation',rowRows);
   var otherRows=[['String','Chiller Electrical Load (kW)','Misc (kW)','Total (kW)']];for(var j=0;j<strings.length;j++){var od=otherData[j]||{mech:0,pumps:0,misc:0};otherRows.push([strings[j],od.mech,od.misc,od.mech+od.misc]);}addCsvSection(lines,'Other Loads',otherRows);
   var fanWallRows=[['Unit','Load (kW)','Primary String','Secondary String']];for(var fw=0;fw<fanWallData.length;fw++)fanWallRows.push(['FW-'+(fw+1),fanWallData[fw].load,fanWallData[fw].primary,fanWallData[fw].secondary]);addCsvSection(lines,'Fan Wall Units',fanWallRows);
   var mechUpsRows=[['String','Other Mech UPS Load (kW)']];for(var mj=0;mj<strings.length;mj++){var mod=otherData[mj]||{mech:0,pumps:0,misc:0};mechUpsRows.push([strings[mj],mod.pumps]);}addCsvSection(lines,'Mech UPS Loads',mechUpsRows);
@@ -791,7 +830,7 @@ function importXML(file){
     nStrings=parseInt(document.getElementById('numStrings').value);nRows=parseInt(document.getElementById('numRows').value);
     var rows=doc.querySelectorAll('rows row');rowLoads=[];allocData=[];
     rowRacks=[];rowFeedType=[];
-    for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);rowRacks.push(parseInt(r.getAttribute('racks'))||22);var rawFeed=r.getAttribute('feed')||'dual';if(rawFeed==='quad')rawFeed='quad2s';rowFeedType.push(rawFeed);allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||''});}
+    for(var i=0;i<rows.length;i++){var r=rows[i],ld=parseFloat(r.getAttribute('load'))||0;rowLoads.push(ld);rowRacks.push(parseInt(r.getAttribute('racks'))||22);var rawFeed=r.getAttribute('feed')||'dual';if(rawFeed==='quad')rawFeed='quad2s';rowFeedType.push(rawFeed);allocData.push({load:ld,a:r.getAttribute('a')||'A',b:r.getAttribute('b')||'B',c:r.getAttribute('c')||'',d:r.getAttribute('d')||'',e:r.getAttribute('e')||'',f:r.getAttribute('f')||''});}
     var fwRows=doc.querySelectorAll('fanWalls fanWall');fanWallData=[];
     for(var f=0;f<fwRows.length;f++){var fw=fwRows[f];fanWallData.push({load:parseFloat(fw.getAttribute('load'))||6.03,primary:fw.getAttribute('primary')||'A',secondary:fw.getAttribute('secondary')||'B'});}    
     if(fwRows.length===0){
@@ -863,7 +902,7 @@ function runMultiScenario(scenarioLoads){
   var upsMode=document.getElementById('upsMode').value;
   var txR=document.getElementById('txRatings').value.split(',').map(function(s){return parseInt(s.trim());}).filter(function(v){return !isNaN(v);}).sort(function(a,b){return a-b;});
   var savedLoads=rowLoads.slice();
-  var savedAlloc=allocData.map(function(r){return {load:r.load,a:r.a,b:r.b,c:r.c,d:r.d,e:r.e};});
+  var savedAlloc=allocData.map(function(r){return {load:r.load,a:r.a,b:r.b,c:r.c,d:r.d,e:r.e,f:r.f||''};});
   var results=[];
   for(var si=0;si<scenarioLoads.length;si++){
     var sc=scenarioLoads[si];
@@ -1002,7 +1041,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnCalc').addEventListener('click',calculate);
   document.getElementById('btnPrint').addEventListener('click',function(){window.print();});
   document.getElementById('btnExportCsv').addEventListener('click',exportCSV);
-  document.getElementById('distMode').addEventListener('change',function(){document.getElementById('modeDesc').textContent=MODES[this.value];});
+  document.getElementById('distMode').addEventListener('change',function(){document.getElementById('modeDesc').textContent=MODES[this.value];if(this.value==='hex'){var ns=document.getElementById('numStrings');if(parseInt(ns.value)<6){ns.value=6;}}});
   document.getElementById('btnExport').addEventListener('click',exportXML);
   document.getElementById('btnImport').addEventListener('click',function(){document.getElementById('fileInput').click();});
   document.getElementById('fileInput').addEventListener('change',function(e){if(e.target.files[0])importXML(e.target.files[0]);e.target.value='';});
